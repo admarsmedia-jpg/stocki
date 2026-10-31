@@ -1,0 +1,30 @@
+{
+  "name": "stocki",
+  "main": "src/api/index.ts",
+  "compatibility_date": "2024-10-22",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Static assets served from the same Worker
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+
+  // D1 database — database_id is set per-deployment via `wrangler d1 create stocki-db`
+  // Run: wrangler d1 create stocki-db  then copy the id into .wrangler/wrangler.toml.local (gitignored)
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "stocki-db",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Secrets (set via: wrangler secret put ADMIN_EMAIL / APP_SECRET)
+  // Local dev: put them in .dev.vars (gitignored)
+  "vars": {},
+
+  "[env.preview]": {},
+  "[env.production]": {}
+}
