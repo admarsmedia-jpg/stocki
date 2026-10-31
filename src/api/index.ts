@@ -6,6 +6,7 @@ import { hashPassword } from "../domain/auth";
 import { users, sessions, items as itemsTable, categories, units } from "../db/schema";
 import { eq, like, or } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import importApp from "./import-service";
 
 type Bindings = {
   DB: D1Database;
@@ -218,6 +219,9 @@ app.put("/api/items/:id", async (c) => {
 
   return c.json({ ok: true });
 });
+
+// ── import ────────────────────────────────────────────────────────────────────
+app.route("/", importApp);
 
 // ── frontend fallback ─────────────────────────────────────────────────────────
 app.get("*", async (c) => {
