@@ -5,11 +5,18 @@ import { useStore } from "./store";
 import Login from "./pages/Login";
 import Setup from "./pages/Setup";
 import Items from "./pages/Items";
+import Import from "./pages/Import";
+import Receive from "./pages/Receive";
+import Issue from "./pages/Issue";
+
+type Page = "items" | "import" | "receive" | "issue";
 
 function App() {
   const { user, setUser } = useStore();
   const [checking, setChecking] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [page, setPage] = useState<Page>("items");
+  const [docId, setDocId] = useState<number | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -34,17 +41,38 @@ function App() {
   if (needsSetup) return <Setup onDone={() => { setNeedsSetup(false); }} />;
   if (!user) return <Login onLogin={() => {}} />;
 
+  function nav(p: Page) {
+    return () => { setPage(p); setDocId(null); };
+  }
+
+  // minimal router via navigate prop
+  const navigateFn = (path: string) => {
+    if (path.startsWith("/documents/")) {
+      setDocId(Number(path.split("/").pop()));
+      setPage("items");
+    } else {
+      setPage("items");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b px-6 py-3 flex items-center justify-between">
-        <span className="font-bold text-gray-800">Stocki</span>
-        <div className="flex items-center gap-4">
+      <nav className="bg-white border-b px-6 py-3 flex items-center gap-6">
+        <span className="font-bold text-gray-800 mr-4">Stocki</span>
+        <button onClick={nav("items")} className={`text-sm ${page === "items" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>สินค้า</button>
+        <button onClick={nav("import")} className={`text-sm ${page === "import" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>นำเข้า Excel</button>
+        <button onClick={nav("receive")} className={`text-sm ${page === "receive" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>รับสินค้า</button>
+        <button onClick={nav("issue")} className={`text-sm ${page === "issue" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>ตัดออก</button>
+        <div className="ml-auto flex items-center gap-4">
           <span className="text-sm text-gray-500">{user.email} ({user.role === "OWNER" ? "ผู้ดูแล" : "พนักงาน"})</span>
           <button onClick={handleLogout} className="text-sm text-red-600 hover:underline">ออกจากระบบ</button>
         </div>
       </nav>
       <main>
-        <Items />
+        {page === "items" && <Items />}
+        {page === "import" && <Import />}
+        {page === "receive" && <Receive navigate={navigateFn} />}
+        {page === "issue" && <Issue navigate={navigateFn} />}
       </main>
     </div>
   );

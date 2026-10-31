@@ -4,6 +4,21 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-d4] - 2026-10-31
+
+### Added (D4 — รับเข้า + ตัดออก)
+- `src/domain/documentEngine.ts` — pure functions: `isExpired`, `computeFEFOOrder`, `validateIssueLines`, `buildIdempotencyResponse`, `buildDocNo`
+- `src/api/documents-service.ts` — POST /api/documents/receive, POST /api/documents/issue, POST /api/documents/:id/cancel, GET /api/documents, GET /api/documents/:id, GET /api/lots/suggest (FEFO)
+- GET /api/warehouses, POST /api/lots (upsert) เพิ่มใน index.ts
+- `src/web/pages/Receive.tsx` — หน้ารับสินค้า รองรับ keyboard wedge barcode, เตือนแป้นพิมพ์ไทย, รองรับ lot
+- `src/web/pages/Issue.tsx` — หน้าตัดออก FEFO lot selector, เตือนแป้นพิมพ์ไทย
+- เพิ่ม nav Receive/Issue ใน main.tsx
+- `tests/documents.test.ts` — 14 test cases ครอบคลุม: moving average, validateIssueLines, FEFO order, expired lot, idempotency, concurrent safety
+
+### Security
+- ตัดออก: ใช้ SQL `WHERE qty_on_hand_milli >= ?` ป้องกัน race condition (ยอดไม่ติดลบเมื่อมีคำขอพร้อมกัน)
+- Cancel: สร้าง movement กลับรายการ ไม่ลบของเดิม
+
 ## [0.1.0-d3] - 2026-10-31
 
 ### Added (D3 — นำเข้าสต็อกจาก Excel)

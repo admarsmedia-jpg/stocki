@@ -7,6 +7,7 @@ import { users, sessions, items as itemsTable, categories, units } from "../db/s
 import { eq, like, or } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import importApp from "./import-service";
+import docApp from "./documents-service";
 
 type Bindings = {
   DB: D1Database;
@@ -155,6 +156,32 @@ function applyRoleFilter(item: any, role: string) {
   return item;
 }
 
+// ── warehouses (list for dropdowns) ──────────────────────────────────────────
+app.get("/api/warehouses", async (c) => {
+  const session = c.get("session");
+  if (!session) return c.json({ error: "unauthorized" }, 401);
+  const rows = await c.env.DB.prepare("SELECT id, code, name FROM warehouses WHERE is_active=1 ORDER BY code").all();
+  return c.json({ warehouses: rows.results });
+});
+
+// ── lots upsert (สำหรับ Receive) ─────────────────────────────────────────────
+app.post("/api/lots", async (c) => {
+  const session = c.get("session");
+  if (!session) return c.json({ error: "unauthorized" }, 401);
+  const body = await c.req.json().catch(() => null);
+  if (!body) return c.json({ error: "invalid_json" }, 400);
+  const { item_id, lot_no, mfg_date, expiry_date, po_no, manufacturer_name } = body;
+  if (!item_id || !lot_no || !mfg_date || !expiry_date) return c.json({ error: "missing_fields" }, 400);
+  const nowIso = new Date().toISOString();
+  await c.env.DB.prepare(
+    `INSERT INTO lots (item_id, lot_no, mfg_date, expiry_date, po_no, manufacturer_name, created_at)
+     VALUES (?,?,?,?,?,?,?)
+     ON CONFLICT(item_id, lot_no) DO NOTHING`,
+  ).bind(item_id, lot_no, mfg_date, expiry_date, po_no ?? null, manufacturer_name ?? null, nowIso).run();
+  const row = await c.env.DB.prepare("SELECT id FROM lots WHERE item_id=? AND lot_no=?").bind(item_id, lot_no).first() as { id: number };
+  return c.json({ ok: true, lot_id: row.id });
+});
+
 app.get("/api/items", async (c) => {
   const session = c.get("session");
   if (!session) return c.json({ error: "unauthorized" }, 401);
@@ -222,6 +249,9 @@ app.put("/api/items/:id", async (c) => {
 
 // ── import ────────────────────────────────────────────────────────────────────
 app.route("/", importApp);
+
+// ── documents ─────────────────────────────────────────────────────────────────
+app.route("/", docApp);
 
 // ── frontend fallback ─────────────────────────────────────────────────────────
 app.get("*", async (c) => {
