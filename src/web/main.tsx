@@ -7,9 +7,10 @@ import Setup from "./pages/Setup";
 import Items from "./pages/Items";
 import Import from "./pages/Import";
 import Receive from "./pages/Receive";
+import Reports from "./pages/Reports";
 import Issue from "./pages/Issue";
 
-type Page = "items" | "import" | "receive" | "issue";
+type Page = "items" | "import" | "receive" | "issue" | "reports";
 
 function App() {
   const { user, setUser } = useStore();
@@ -63,6 +64,7 @@ function App() {
         <button onClick={nav("import")} className={`text-sm ${page === "import" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>นำเข้า Excel</button>
         <button onClick={nav("receive")} className={`text-sm ${page === "receive" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>รับสินค้า</button>
         <button onClick={nav("issue")} className={`text-sm ${page === "issue" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>ตัดออก</button>
+        <button onClick={nav("reports")} className={`text-sm ${page === "reports" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>รายงาน</button>
         <div className="ml-auto flex items-center gap-4">
           <span className="text-sm text-gray-500">{user.email} ({user.role === "OWNER" ? "ผู้ดูแล" : "พนักงาน"})</span>
           <button onClick={handleLogout} className="text-sm text-red-600 hover:underline">ออกจากระบบ</button>
@@ -73,6 +75,7 @@ function App() {
         {page === "import" && <Import />}
         {page === "receive" && <Receive navigate={navigateFn} />}
         {page === "issue" && <Issue navigate={navigateFn} />}
+        {page === "reports" && <Reports />}
       </main>
     </div>
   );

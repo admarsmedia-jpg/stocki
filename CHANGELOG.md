@@ -4,6 +4,15 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-d5] - 2026-10-31
+
+### Added (D5 — รายงานสรุป + ทดสอบติดตั้ง)
+- `src/domain/reportEngine.ts` — pure functions: filterCostFields, buildBalanceRows, buildMovementSummary, buildExpiringRows, buildReorderRows, buildExcelColumns
+- `src/api/reports-service.ts` — GET /api/reports/balance, /movements, /card/:id, /lots, /expiring, /reorder, /balance/export
+- `src/web/pages/Reports.tsx` — แสดงรายงาน 6 ประเภท, Export Excel (SheetJS client-side), STAFF ไม่เห็นคอลัมน์มูลค่า
+- STAFF filter ตรวจที่ API layer ทั้ง JSON response และ Excel export
+- 9 tests ใหม่: filterCostFields (OWNER/STAFF), buildBalanceRows, buildMovementSummary, buildExpiringRows, buildReorderRows, buildExcelColumns
+
 ## [0.1.0-d4] - 2026-10-31
 
 ### Added (D4 — รับเข้า + ตัดออก)

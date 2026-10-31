@@ -8,6 +8,7 @@ import { eq, like, or } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import importApp from "./import-service";
 import docApp from "./documents-service";
+import reportsApp from "./reports-service";
 
 type Bindings = {
   DB: D1Database;
@@ -252,6 +253,7 @@ app.route("/", importApp);
 
 // ── documents ─────────────────────────────────────────────────────────────────
 app.route("/", docApp);
+app.route("/api/reports", reportsApp);
 
 // ── frontend fallback ─────────────────────────────────────────────────────────
 app.get("*", async (c) => {
