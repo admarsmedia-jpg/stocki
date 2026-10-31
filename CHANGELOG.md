@@ -4,6 +4,17 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-d2] - 2026-10-31
+
+### Added (D2 — ล็อกอิน + หน้าสินค้า)
+- POST /api/auth/login — PBKDF2-SHA256 ≥100,000 รอบ, ล็อก 15 นาทีหลังผิด 10 ครั้ง
+- POST /api/auth/logout, GET /api/auth/me
+- GET/POST/PUT /api/items — ค้นด้วยชื่อหรือบาร์โค้ด, audit_logs ทุกครั้ง
+- STAFF เรียกข้อมูลต้นทุน → 403 (ตรวจที่ API)
+- Cookie: HttpOnly; Secure; SameSite=Lax
+- GET /api/setup/status + POST /api/setup/init (first-run)
+- Frontend: หน้า Setup, Login, Items (React + Zustand + Tailwind)
+
 ## [0.1.0-d1] - 2026-10-31
 
 ### Added (D1 — โครงโปรเจกต์ + ฐานข้อมูล)
