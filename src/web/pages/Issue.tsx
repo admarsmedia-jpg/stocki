@@ -53,8 +53,8 @@ export default function Issue({ navigate }: { navigate: (path: string) => void }
 
   async function lookupBarcode(barcode: string) {
     if (!barcode.trim() || !warehouseId) return;
-    const r = await fetch(`/api/items?search=${encodeURIComponent(barcode)}`).then(r => r.json());
-    const item = r.items?.find((i: Item) => i.barcode === barcode || i.sku === barcode);
+    const r = await fetch(`/api/items?q=${encodeURIComponent(barcode)}`).then(r => r.json());
+    const item = (r.items ?? []).find((i: Item) => i.barcode === barcode || i.sku === barcode);
     if (!item) { setError(`ไม่พบสินค้า: ${barcode}`); return; }
 
     setPendingItem(item);

@@ -9,11 +9,17 @@ type Item = {
   track_lot: number;
   status: string;
   standard_cost_x4?: number;
+  unit_id?: number;
+  category_id?: number;
+  reorder_point_milli?: number;
 };
+
+type Unit = { id: number; code: string; name_th: string };
 
 export default function Items() {
   const user = useStore((s) => s.user);
   const [items, setItems] = useState<Item[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [editItem, setEditItem] = useState<Item | null>(null);
@@ -22,12 +28,15 @@ export default function Items() {
   async function load(query = "") {
     setLoading(true);
     const res = await fetch(`/api/items?q=${encodeURIComponent(query)}`);
-    const data = await res.json() as Item[];
-    setItems(data);
+    const data = await res.json() as { items: Item[] };
+    setItems(data.items ?? []);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    fetch("/api/units").then(r => r.json()).then(d => setUnits(d.units ?? [])).catch(() => {});
+  }, []);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -65,32 +74,37 @@ export default function Items() {
                 <th className="px-3 py-2 border">รหัส</th>
                 <th className="px-3 py-2 border">ชื่อสินค้า</th>
                 <th className="px-3 py-2 border">บาร์โค้ด</th>
+                <th className="px-3 py-2 border">หน่วย</th>
                 <th className="px-3 py-2 border">ใช้ล็อต</th>
                 {user?.role === "OWNER" && <th className="px-3 py-2 border">ต้นทุน</th>}
                 {user?.role === "OWNER" && <th className="px-3 py-2 border">แก้ไข</th>}
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 border font-mono">{item.sku}</td>
-                  <td className="px-3 py-2 border">{item.name_th}</td>
-                  <td className="px-3 py-2 border font-mono text-xs">{item.barcode ?? "-"}</td>
-                  <td className="px-3 py-2 border text-center">{item.track_lot ? "✓" : "-"}</td>
-                  {user?.role === "OWNER" && (
-                    <td className="px-3 py-2 border text-right">
-                      {item.standard_cost_x4 !== undefined ? (item.standard_cost_x4 / 10000).toFixed(2) : "-"}
-                    </td>
-                  )}
-                  {user?.role === "OWNER" && (
-                    <td className="px-3 py-2 border text-center">
-                      <button onClick={() => { setEditItem(item); setShowForm(true); }} className="text-blue-600 hover:underline text-xs">แก้ไข</button>
-                    </td>
-                  )}
-                </tr>
-              ))}
+              {items.map((item) => {
+                const unit = units.find(u => u.id === item.unit_id);
+                return (
+                  <tr key={item.id} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 border font-mono">{item.sku}</td>
+                    <td className="px-3 py-2 border">{item.name_th}</td>
+                    <td className="px-3 py-2 border font-mono text-xs">{item.barcode ?? "-"}</td>
+                    <td className="px-3 py-2 border text-center">{unit ? unit.name_th : "-"}</td>
+                    <td className="px-3 py-2 border text-center">{item.track_lot ? "✓" : "-"}</td>
+                    {user?.role === "OWNER" && (
+                      <td className="px-3 py-2 border text-right">
+                        {item.standard_cost_x4 !== undefined ? (item.standard_cost_x4 / 10000).toFixed(2) : "-"}
+                      </td>
+                    )}
+                    {user?.role === "OWNER" && (
+                      <td className="px-3 py-2 border text-center">
+                        <button onClick={() => { setEditItem(item); setShowForm(true); }} className="text-blue-600 hover:underline text-xs">แก้ไข</button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
               {items.length === 0 && (
-                <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-400">ไม่พบสินค้า</td></tr>
+                <tr><td colSpan={7} className="px-3 py-4 text-center text-gray-400">ไม่พบสินค้า</td></tr>
               )}
             </tbody>
           </table>
@@ -100,6 +114,7 @@ export default function Items() {
       {showForm && (
         <ItemForm
           item={editItem}
+          units={units}
           onSave={() => { setShowForm(false); load(q); }}
           onCancel={() => setShowForm(false)}
         />
@@ -108,29 +123,46 @@ export default function Items() {
   );
 }
 
-function ItemForm({ item, onSave, onCancel }: { item: Item | null; onSave: () => void; onCancel: () => void }) {
+function ItemForm({ item, units, onSave, onCancel }: { item: Item | null; units: Unit[]; onSave: () => void; onCancel: () => void }) {
   const [sku, setSku] = useState(item?.sku ?? "");
   const [name, setName] = useState(item?.name_th ?? "");
   const [barcode, setBarcode] = useState(item?.barcode ?? "");
   const [trackLot, setTrackLot] = useState(item ? Boolean(item.track_lot) : false);
   const [cost, setCost] = useState(item?.standard_cost_x4 !== undefined ? (item.standard_cost_x4 / 10000).toString() : "0");
+  const [unitId, setUnitId] = useState<number>(item?.unit_id ?? (units[0]?.id ?? 1));
+  const [reorderPoint, setReorderPoint] = useState(item?.reorder_point_milli !== undefined ? (item.reorder_point_milli / 1000).toString() : "0");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!item && units.length > 0 && unitId !== units[0].id) {
+      setUnitId(units[0].id);
+    }
+  }, [units]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    const body = {
+    const costVal = parseFloat(cost);
+    if (isNaN(costVal) || costVal < 0) { setError("ต้นทุนต้องเป็นตัวเลขที่ไม่ติดลบ"); return; }
+    const reorderVal = parseFloat(reorderPoint);
+    if (isNaN(reorderVal) || reorderVal < 0) { setError("จุดสั่งซื้อต้องเป็นตัวเลขที่ไม่ติดลบ"); return; }
+    const body: Record<string, unknown> = {
       sku,
       name_th: name,
-      barcode: barcode || undefined,
-      unit_id: 1,
+      barcode: barcode || null,
+      unit_id: unitId,
       track_lot: trackLot,
-      standard_cost_x4: Math.round(parseFloat(cost) * 10000),
+      standard_cost_x4: Math.round(costVal * 10000),
+      reorder_point_milli: Math.round(reorderVal * 1000),
     };
     const url = item ? `/api/items/${item.id}` : "/api/items";
     const method = item ? "PUT" : "POST";
     const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (!res.ok) { setError("บันทึกไม่สำเร็จ"); return; }
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({})) as any;
+      setError(d.error || "บันทึกไม่สำเร็จ");
+      return;
+    }
     onSave();
   }
 
@@ -152,8 +184,18 @@ function ItemForm({ item, onSave, onCancel }: { item: Item | null; onSave: () =>
             <input value={barcode} onChange={(e) => setBarcode(e.target.value)} className="w-full border rounded px-3 py-2" />
           </div>
           <div>
+            <label className="block text-sm font-medium mb-1">หน่วยนับ</label>
+            <select value={unitId} onChange={(e) => setUnitId(Number(e.target.value))} className="w-full border rounded px-3 py-2" required>
+              {units.map(u => <option key={u.id} value={u.id}>{u.name_th} ({u.code})</option>)}
+            </select>
+          </div>
+          <div>
             <label className="block text-sm font-medium mb-1">ต้นทุนมาตรฐาน (บาท)</label>
             <input type="number" step="0.01" min="0" value={cost} onChange={(e) => setCost(e.target.value)} className="w-full border rounded px-3 py-2" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">จุดสั่งซื้อ</label>
+            <input type="number" step="0.001" min="0" value={reorderPoint} onChange={(e) => setReorderPoint(e.target.value)} className="w-full border rounded px-3 py-2" />
           </div>
           <div className="flex items-center gap-2">
             <input type="checkbox" id="track_lot" checked={trackLot} onChange={(e) => setTrackLot(e.target.checked)} />

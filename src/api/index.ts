@@ -61,9 +61,11 @@ app.post("/api/setup/init", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid_input", issues: parsed.error.issues }, 400);
 
   const hash = await hashPassword(parsed.data.password);
-  await c.env.DB.prepare(
-    "INSERT INTO users (email, password_hash, role) VALUES (?, ?, 'OWNER')",
-  ).bind(c.env.ADMIN_EMAIL, hash).run();
+  await c.env.DB.batch([
+    c.env.DB.prepare("INSERT INTO users (email, password_hash, role) VALUES (?, ?, 'OWNER')").bind(c.env.ADMIN_EMAIL, hash),
+    c.env.DB.prepare("INSERT OR IGNORE INTO units (id, code, name_th, decimal_places) VALUES (1,'PCS','ชิ้น',0),(2,'SET','เครื่อง',0),(3,'ROLL','ม้วน',0),(4,'BOX','กล่อง',0),(5,'KG','กก.',3)"),
+    c.env.DB.prepare("INSERT OR IGNORE INTO warehouses (id, code, name, is_active) VALUES (1,'WH01','คลังหลัก',1),(2,'WH02','คลังสาขา',1)"),
+  ]);
 
   return c.json({ ok: true });
 });
@@ -157,12 +159,84 @@ function applyRoleFilter(item: any, role: string) {
   return item;
 }
 
-// ── warehouses (list for dropdowns) ──────────────────────────────────────────
+// ── units ─────────────────────────────────────────────────────────────────────
+app.get("/api/units", async (c) => {
+  const session = c.get("session");
+  if (!session) return c.json({ error: "unauthorized" }, 401);
+  const rows = await c.env.DB.prepare("SELECT id, code, name_th, decimal_places FROM units ORDER BY id").all();
+  return c.json({ units: rows.results });
+});
+
+app.post("/api/units", async (c) => {
+  const session = c.get("session");
+  if (!session) return c.json({ error: "unauthorized" }, 401);
+  if (session.role !== "OWNER") return c.json({ error: "forbidden" }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const schema = z.object({ code: z.string().min(1).max(20), name_th: z.string().min(1).max(50), decimal_places: z.number().int().min(0).max(6).default(0) });
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "invalid_input", issues: parsed.error.issues }, 400);
+  try {
+    const r = await c.env.DB.prepare("INSERT INTO units (code, name_th, decimal_places) VALUES (?,?,?)").bind(parsed.data.code, parsed.data.name_th, parsed.data.decimal_places).run();
+    return c.json({ ok: true, id: r.meta.last_row_id });
+  } catch (e: any) {
+    if (String(e).includes("UNIQUE")) return c.json({ error: "รหัสหน่วยซ้ำ" }, 400);
+    throw e;
+  }
+});
+
+app.put("/api/units/:id", async (c) => {
+  const session = c.get("session");
+  if (!session) return c.json({ error: "unauthorized" }, 401);
+  if (session.role !== "OWNER") return c.json({ error: "forbidden" }, 403);
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json().catch(() => ({}));
+  const schema = z.object({ code: z.string().min(1).max(20).optional(), name_th: z.string().min(1).max(50).optional(), decimal_places: z.number().int().min(0).max(6).optional() });
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "invalid_input", issues: parsed.error.issues }, 400);
+  const { code, name_th, decimal_places } = parsed.data;
+  if (code !== undefined) await c.env.DB.prepare("UPDATE units SET code=? WHERE id=?").bind(code, id).run();
+  if (name_th !== undefined) await c.env.DB.prepare("UPDATE units SET name_th=? WHERE id=?").bind(name_th, id).run();
+  if (decimal_places !== undefined) await c.env.DB.prepare("UPDATE units SET decimal_places=? WHERE id=?").bind(decimal_places, id).run();
+  return c.json({ ok: true });
+});
+
+// ── warehouses ────────────────────────────────────────────────────────────────
 app.get("/api/warehouses", async (c) => {
   const session = c.get("session");
   if (!session) return c.json({ error: "unauthorized" }, 401);
   const rows = await c.env.DB.prepare("SELECT id, code, name FROM warehouses WHERE is_active=1 ORDER BY code").all();
   return c.json({ warehouses: rows.results });
+});
+
+app.post("/api/warehouses", async (c) => {
+  const session = c.get("session");
+  if (!session) return c.json({ error: "unauthorized" }, 401);
+  if (session.role !== "OWNER") return c.json({ error: "forbidden" }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const schema = z.object({ code: z.string().min(1).max(20), name: z.string().min(1).max(100) });
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "invalid_input", issues: parsed.error.issues }, 400);
+  try {
+    const r = await c.env.DB.prepare("INSERT INTO warehouses (code, name, is_active) VALUES (?,?,1)").bind(parsed.data.code, parsed.data.name).run();
+    return c.json({ ok: true, id: r.meta.last_row_id });
+  } catch (e: any) {
+    if (String(e).includes("UNIQUE")) return c.json({ error: "รหัสคลังซ้ำ" }, 400);
+    throw e;
+  }
+});
+
+app.put("/api/warehouses/:id", async (c) => {
+  const session = c.get("session");
+  if (!session) return c.json({ error: "unauthorized" }, 401);
+  if (session.role !== "OWNER") return c.json({ error: "forbidden" }, 403);
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json().catch(() => ({}));
+  const schema = z.object({ name: z.string().min(1).max(100).optional(), is_active: z.boolean().optional() });
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "invalid_input", issues: parsed.error.issues }, 400);
+  if (parsed.data.name !== undefined) await c.env.DB.prepare("UPDATE warehouses SET name=? WHERE id=?").bind(parsed.data.name, id).run();
+  if (parsed.data.is_active !== undefined) await c.env.DB.prepare("UPDATE warehouses SET is_active=? WHERE id=?").bind(parsed.data.is_active ? 1 : 0, id).run();
+  return c.json({ ok: true });
 });
 
 // ── lots upsert (สำหรับ Receive) ─────────────────────────────────────────────
@@ -183,21 +257,36 @@ app.post("/api/lots", async (c) => {
   return c.json({ ok: true, lot_id: row.id });
 });
 
+app.get("/api/items/by-code/:code", async (c) => {
+  const session = c.get("session");
+  if (!session) return c.json({ error: "unauthorized" }, 401);
+  const code = c.req.param("code").trim();
+  const row = await c.env.DB.prepare(
+    "SELECT * FROM items WHERE (barcode=? OR sku=?) AND status='ACTIVE' LIMIT 1"
+  ).bind(code, code).first() as any;
+  if (!row) return c.json({ error: "not_found" }, 404);
+  return c.json(applyRoleFilter(row, session.role));
+});
+
 app.get("/api/items", async (c) => {
   const session = c.get("session");
   if (!session) return c.json({ error: "unauthorized" }, 401);
 
-  const q = c.req.query("q") ?? "";
+  const q = (c.req.query("q") ?? c.req.query("search") ?? "").trim();
   let rows: any[];
-  if (q && /^\d{8,}$/.test(q.trim())) {
-    rows = await c.env.DB.prepare("SELECT * FROM items WHERE barcode=? AND status='ACTIVE'").bind(q.trim()).all().then(r => r.results);
+  if (q && /^\d{8,}$/.test(q)) {
+    rows = await c.env.DB.prepare(
+      "SELECT * FROM items WHERE (barcode=? OR sku=?) AND status='ACTIVE'"
+    ).bind(q, q).all().then(r => r.results);
   } else if (q) {
-    rows = await c.env.DB.prepare("SELECT * FROM items WHERE name_th LIKE ? AND status='ACTIVE'").bind(`%${q}%`).all().then(r => r.results);
+    rows = await c.env.DB.prepare(
+      "SELECT * FROM items WHERE (name_th LIKE ? OR sku LIKE ? OR barcode LIKE ?) AND status='ACTIVE'"
+    ).bind(`%${q}%`, `%${q}%`, `%${q}%`).all().then(r => r.results);
   } else {
     rows = await c.env.DB.prepare("SELECT * FROM items WHERE status='ACTIVE'").all().then(r => r.results);
   }
 
-  return c.json(rows.map((item) => applyRoleFilter(item, session.role)));
+  return c.json({ items: rows.map((item) => applyRoleFilter(item, session.role)) });
 });
 
 app.post("/api/items", async (c) => {
@@ -210,10 +299,23 @@ app.post("/api/items", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid_input", issues: parsed.error.issues }, 400);
 
   const d = parsed.data;
-  const result = await c.env.DB.prepare(
-    `INSERT INTO items (sku, name_th, barcode, category_id, unit_id, track_lot, reorder_point_milli, standard_cost_x4)
-     VALUES (?,?,?,?,?,?,?,?)`,
-  ).bind(d.sku, d.name_th, d.barcode ?? null, d.category_id ?? null, d.unit_id, d.track_lot ? 1 : 0, d.reorder_point_milli, d.standard_cost_x4).run();
+
+  const unitRow = await c.env.DB.prepare("SELECT id FROM units WHERE id=?").bind(d.unit_id).first();
+  if (!unitRow) return c.json({ error: "หน่วยนับไม่ถูกต้อง" }, 400);
+
+  let result: Awaited<ReturnType<D1PreparedStatement["run"]>>;
+  try {
+    result = await c.env.DB.prepare(
+      `INSERT INTO items (sku, name_th, barcode, category_id, unit_id, track_lot, reorder_point_milli, standard_cost_x4)
+       VALUES (?,?,?,?,?,?,?,?)`,
+    ).bind(d.sku, d.name_th, d.barcode ?? null, d.category_id ?? null, d.unit_id, d.track_lot ? 1 : 0, d.reorder_point_milli, d.standard_cost_x4).run();
+  } catch (e: any) {
+    const msg = String(e);
+    if (msg.includes("UNIQUE") && msg.includes("sku")) return c.json({ error: "รหัสสินค้าซ้ำ" }, 400);
+    if (msg.includes("UNIQUE") && msg.includes("barcode")) return c.json({ error: "บาร์โค้ดซ้ำ" }, 400);
+    if (msg.includes("UNIQUE")) return c.json({ error: "ข้อมูลซ้ำ" }, 400);
+    throw e;
+  }
 
   const id = result.meta.last_row_id;
   await c.env.DB.prepare(
