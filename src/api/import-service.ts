@@ -148,6 +148,7 @@ importApp.post("/api/import/opening", async (c) => {
   }
 
   const docIds: number[] = [];
+  const skippedRows: Array<{ rowNum: number; sku: string; reason: string }> = [];
 
   for (const [wCode, wRows] of byWarehouse) {
     const warehouse_id = warehouseIdByCode.get(wCode)!;
@@ -218,7 +219,7 @@ importApp.post("/api/import/opening", async (c) => {
       ).bind(item_id, lotIdSentinel, warehouse_id).first();
 
       if (existingBalance) {
-        // ข้ามแถวที่มียอดยกมาแล้ว (ไม่สร้างซ้ำ)
+        skippedRows.push({ rowNum: row.rowNum, sku: row.sku, reason: "มียอดสต็อกอยู่แล้ว ข้ามการนำเข้ายอดยกมา" });
         continue;
       }
 
@@ -265,7 +266,7 @@ importApp.post("/api/import/opening", async (c) => {
       const movStmt = c.env.DB.prepare(
         `INSERT INTO stock_movements (document_id, item_id, lot_id, warehouse_id, movement_date, direction, qty_milli, unit_cost_x4, balance_qty_after_milli, avg_cost_after_x4)
          VALUES (?,?,?,?,?,1,?,?,?,?)`,
-      ).bind(doc_id, lu.item_id, lu.lot_id, lu.warehouse_id, docDate, lu.qty_milli, lu.unit_cost_x4, lu.new_qty, lu.new_avg_cost);
+      ).bind(doc_id, lu.item_id, lu.lot_id || null, lu.warehouse_id, docDate, lu.qty_milli, lu.unit_cost_x4, lu.new_qty, lu.new_avg_cost);
 
       const balStmt = c.env.DB.prepare(
         `INSERT INTO stock_balances (item_id, lot_id, warehouse_id, qty_on_hand_milli, avg_cost_x4, updated_at)
@@ -286,7 +287,7 @@ importApp.post("/api/import/opening", async (c) => {
     await c.env.DB.batch([...stmts, docPostStmt]);
   }
 
-  return c.json({ ok: true, doc_ids: docIds });
+  return c.json({ ok: true, doc_ids: docIds, skipped: skippedRows });
 });
 
 export default importApp;

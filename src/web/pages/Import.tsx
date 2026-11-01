@@ -80,7 +80,12 @@ export default function Import() {
       setMessage(`พบ ${json.errors.length} แถวผิดพลาด`);
     } else {
       setStatus("done");
-      setMessage("นำเข้าสำเร็จ");
+      const skipped = json.skipped ?? [];
+      if (skipped.length > 0) {
+        setMessage(`นำเข้าสำเร็จ — ข้ามยอดยกมา ${skipped.length} แถวที่มีสต็อกอยู่แล้ว: ${skipped.map((s: any) => `แถว ${s.rowNum} ${s.sku}`).join(", ")}`);
+      } else {
+        setMessage("นำเข้าสำเร็จ");
+      }
       setRows([]);
     }
   }

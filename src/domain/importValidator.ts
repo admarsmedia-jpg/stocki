@@ -52,7 +52,7 @@ export function validateImportRows(
     const qtyRaw = Number(raw["จำนวนยกมา"]);
     const unit_cost_raw = Number(raw["ต้นทุนต่อหน่วย"] ?? 0);
     const reorder_raw = raw["จุดสั่งซื้อ"] !== undefined ? Number(raw["จุดสั่งซื้อ"]) : undefined;
-    const track_lot_raw = String(raw["ใช้ล็อต"] ?? "N").trim().toUpperCase();
+    const track_lot_raw = String(raw["ใช้ล็อต (Y/N)"] ?? raw["ใช้ล็อต"] ?? "N").trim().toUpperCase();
     const track_lot = ["Y", "YES", "TRUE", "1", "ใช่", "ใช้"].includes(track_lot_raw);
     const lot_no = String(raw["Lot No."] ?? "").trim() || undefined;
     const mfg_raw = raw["วันผลิต"];

@@ -4,6 +4,17 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-bugfix4] - 2026-11-01
+
+### Fixed
+- **documents-service / import-service (stock_movements)**: เปลี่ยน `lu.lot_id` → `lu.lot_id || null` ใน INSERT stock_movements
+  ป้องกัน FOREIGN KEY constraint failed กรณีที่ migration 0003 ยังไม่ได้ apply บน remote DB
+  stock_movements.lot_id ไม่ได้อยู่ใน PRIMARY KEY จึงใช้ NULL ได้ปลอดภัย (bug A)
+- **importValidator**: รองรับหัวคอลัมน์ `ใช้ล็อต (Y/N)` เพิ่มเติมจาก `ใช้ล็อต` (bug B)
+- **import-service**: คืน `skipped[]` พร้อม rowNum และเหตุผลเมื่อข้ามยอดยกมาที่มีสต็อกอยู่แล้ว (bug C)
+- **Import.tsx**: แสดงรายการแถวที่ถูกข้ามใน success message แทนที่จะขึ้น "สำเร็จ" เฉยๆ (bug C)
+- **documents-service (ISSUE)**: error message เปลี่ยนจาก `"validation_failed"` เป็น errors จริง เช่น `"ยอดไม่เพียงพอ"`
+
 ## [0.1.0-bugfix3] - 2026-11-01
 
 ### Fixed
