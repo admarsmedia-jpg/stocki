@@ -51,16 +51,17 @@ importApp.post("/api/import/opening", async (c) => {
   const { idempotency_key, rows } = parsed.data;
 
   // ตรวจ idempotency — เฉพาะ POSTED เท่านั้น
+  // documents เก็บ key แบบ "${idempotency_key}:${warehouseCode}" จึงใช้ LIKE
   const existing = await c.env.DB.prepare(
-    "SELECT id FROM documents WHERE idempotency_key=? AND doc_type='OPENING' AND status='POSTED' LIMIT 1",
-  ).bind(idempotency_key).first() as { id: number } | null;
+    "SELECT id FROM documents WHERE idempotency_key LIKE ? AND doc_type='OPENING' AND status='POSTED' LIMIT 1",
+  ).bind(idempotency_key + "%").first() as { id: number } | null;
   if (existing) {
     return c.json({ ok: true, already_imported: true });
   }
   // ล้าง DRAFT ที่ค้างจากการ fail ครั้งก่อน
   await c.env.DB.prepare(
-    "DELETE FROM documents WHERE idempotency_key=? AND doc_type='OPENING' AND status='DRAFT'",
-  ).bind(idempotency_key).run();
+    "DELETE FROM documents WHERE idempotency_key LIKE ? AND doc_type='OPENING' AND status='DRAFT'",
+  ).bind(idempotency_key + "%").run();
 
   // โหลด units และ warehouses สำหรับ validation (รองรับทั้ง code และ name_th)
   const unitRows = await c.env.DB.prepare("SELECT code, name_th FROM units").all();
@@ -129,17 +130,7 @@ importApp.post("/api/import/opening", async (c) => {
   const docDate = nowIso.slice(0, 10);
   const yymm = docDate.slice(2, 4) + docDate.slice(5, 7);
 
-  // สร้างเลขเอกสาร OPN-YYMM-XXXX (RETURNING ทำให้ atomic)
-  const seqRow = await c.env.DB.prepare(
-    `INSERT INTO doc_sequences (doc_type, yymm, last_no) VALUES ('OPENING',?,1)
-     ON CONFLICT(doc_type, yymm) DO UPDATE SET last_no = last_no + 1
-     RETURNING last_no`,
-  ).bind(yymm).first() as { last_no: number };
-  const doc_no = `OPN-${yymm}-${String(seqRow.last_no).padStart(4, "0")}`;
-
-  // ทุกแถวใช้คลังแรกของแถวแรกสำหรับ document (warehouse ต่างกันต้องแยก batch)
-  // โมเดลนี้: 1 document ต่อ 1 คลัง — ถ้าหลายคลังจะแยก document อัตโนมัติ
-  // สำหรับ v0.1: ใช้คลังของแต่ละแถวแยก document
+  // doc_no สร้างต่อ warehouse ในลูปด้านล่าง (1 คลัง = 1 เอกสาร = 1 เลข)
 
   // จัดกลุ่มตามคลัง
   const byWarehouse = new Map<string, typeof valid>();
@@ -234,6 +225,14 @@ importApp.post("/api/import/opening", async (c) => {
     }
 
     if (lineInputs.length === 0) continue;
+
+    // สร้างเลขเอกสาร OPN-YYMM-XXXX ต่อ warehouse (RETURNING ทำให้ atomic)
+    const seqRow = await c.env.DB.prepare(
+      `INSERT INTO doc_sequences (doc_type, yymm, last_no) VALUES ('OPENING',?,1)
+       ON CONFLICT(doc_type, yymm) DO UPDATE SET last_no = last_no + 1
+       RETURNING last_no`,
+    ).bind(yymm).first() as { last_no: number };
+    const doc_no = `OPN-${yymm}-${String(seqRow.last_no).padStart(4, "0")}`;
 
     // สร้าง document
     const docResult = await c.env.DB.prepare(

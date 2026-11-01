@@ -4,6 +4,13 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-bugfix6] - 2026-11-01
+
+### Fixed
+- **import-service**: แก้ idempotency check ใช้ `LIKE ?%` แทน exact match เพราะ documents เก็บ key แบบ `${key}:${warehouseCode}` — ทำให้การ import ซ้ำด้วย key เดิมทำงานถูกต้อง
+- **import-service**: ย้ายการสร้าง `doc_no` (OPN-YYMM-XXXX) เข้าไปใน per-warehouse loop — แก้ UNIQUE constraint error เมื่อ import มีหลายคลัง
+- **scripts/test_remote.sh**: เพิ่ม integration test script ครอบคลุม 27 หัวข้อ (PASS=42 assertions): health, setup, login, warehouses, import, items, RECEIVE, ISSUE, cancel, idempotency, FEFO, concurrent, reports, export, access control
+
 ## [0.1.0-bugfix5] - 2026-11-01
 
 ### Fixed
