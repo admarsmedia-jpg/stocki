@@ -50,13 +50,17 @@ importApp.post("/api/import/opening", async (c) => {
 
   const { idempotency_key, rows } = parsed.data;
 
-  // ตรวจ idempotency — ถ้าเคยทำแล้ว return already_imported
+  // ตรวจ idempotency — เฉพาะ POSTED เท่านั้น
   const existing = await c.env.DB.prepare(
-    "SELECT id FROM documents WHERE idempotency_key=? AND doc_type='OPENING' LIMIT 1",
+    "SELECT id FROM documents WHERE idempotency_key=? AND doc_type='OPENING' AND status='POSTED' LIMIT 1",
   ).bind(idempotency_key).first() as { id: number } | null;
   if (existing) {
     return c.json({ ok: true, already_imported: true });
   }
+  // ล้าง DRAFT ที่ค้างจากการ fail ครั้งก่อน
+  await c.env.DB.prepare(
+    "DELETE FROM documents WHERE idempotency_key=? AND doc_type='OPENING' AND status='DRAFT'",
+  ).bind(idempotency_key).run();
 
   // โหลด units และ warehouses สำหรับ validation (รองรับทั้ง code และ name_th)
   const unitRows = await c.env.DB.prepare("SELECT code, name_th FROM units").all();
@@ -125,13 +129,11 @@ importApp.post("/api/import/opening", async (c) => {
   const docDate = nowIso.slice(0, 10);
   const yymm = docDate.slice(2, 4) + docDate.slice(5, 7);
 
-  // สร้างเลขเอกสาร OPN-YYMM-XXXX
-  await c.env.DB.prepare(
-    `INSERT INTO doc_sequences (doc_type, yymm, last_no) VALUES ('OPENING',?,1)
-     ON CONFLICT(doc_type, yymm) DO UPDATE SET last_no = last_no + 1`,
-  ).bind(yymm).run();
+  // สร้างเลขเอกสาร OPN-YYMM-XXXX (RETURNING ทำให้ atomic)
   const seqRow = await c.env.DB.prepare(
-    "SELECT last_no FROM doc_sequences WHERE doc_type='OPENING' AND yymm=?",
+    `INSERT INTO doc_sequences (doc_type, yymm, last_no) VALUES ('OPENING',?,1)
+     ON CONFLICT(doc_type, yymm) DO UPDATE SET last_no = last_no + 1
+     RETURNING last_no`,
   ).bind(yymm).first() as { last_no: number };
   const doc_no = `OPN-${yymm}-${String(seqRow.last_no).padStart(4, "0")}`;
 

@@ -49,15 +49,14 @@ const issueSchema = z.object({
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-async function nextDocNo(db: D1Database, docType: "RECEIVE" | "ISSUE", yymm: string): Promise<string> {
-  await db.prepare(
-    `INSERT INTO doc_sequences (doc_type, yymm, last_no) VALUES (?,?,1)
-     ON CONFLICT(doc_type, yymm) DO UPDATE SET last_no = last_no + 1`,
-  ).bind(docType, yymm).run();
+async function nextDocNo(db: D1Database, docType: string, yymm: string): Promise<string> {
+  // RETURNING ทำให้ atomic — ได้เลขของตัวเองแน่นอน ไม่มี race condition
   const row = await db.prepare(
-    "SELECT last_no FROM doc_sequences WHERE doc_type=? AND yymm=?",
+    `INSERT INTO doc_sequences (doc_type, yymm, last_no) VALUES (?,?,1)
+     ON CONFLICT(doc_type, yymm) DO UPDATE SET last_no = last_no + 1
+     RETURNING last_no`,
   ).bind(docType, yymm).first() as { last_no: number };
-  return buildDocNo(docType, yymm, row.last_no);
+  return buildDocNo(docType as "RECEIVE" | "ISSUE" | "CANCEL", yymm, row.last_no);
 }
 
 async function loadBalanceSnapshot(
@@ -92,11 +91,15 @@ docApp.post("/api/documents/receive", async (c) => {
 
   const { idempotency_key, warehouse_id, doc_date, ref_text, note, lines } = parsed.data;
 
-  // idempotency check
+  // idempotency check — เฉพาะ POSTED เท่านั้น (DRAFT คือล้มเหลวกลางทาง)
   const existing = await c.env.DB.prepare(
-    "SELECT id, status FROM documents WHERE idempotency_key=? AND doc_type='RECEIVE'",
+    "SELECT id, status FROM documents WHERE idempotency_key=? AND doc_type='RECEIVE' AND status='POSTED'",
   ).bind(idempotency_key).first() as { id: number; status: string } | null;
   if (existing) return c.json(buildIdempotencyResponse(existing));
+  // ล้าง DRAFT ที่ค้างจากการ fail ครั้งก่อน
+  await c.env.DB.prepare(
+    "DELETE FROM documents WHERE idempotency_key=? AND doc_type='RECEIVE' AND status='DRAFT'",
+  ).bind(idempotency_key).run();
 
   const yymm = doc_date.slice(2, 4) + doc_date.slice(5, 7);
   const doc_no = await nextDocNo(c.env.DB, "RECEIVE", yymm);
@@ -159,7 +162,13 @@ docApp.post("/api/documents/receive", async (c) => {
       .bind(session.userId, nowIso, doc_id),
   );
 
-  await c.env.DB.batch(stmts);
+  try {
+    await c.env.DB.batch(stmts);
+  } catch (err) {
+    // ล้าง DRAFT ที่ค้างถ้า batch fail — ทำให้ retry ด้วย key เดิมได้
+    await c.env.DB.prepare("DELETE FROM documents WHERE id=? AND status='DRAFT'").bind(doc_id).run();
+    throw err;
+  }
 
   return c.json({ ok: true, doc_id, doc_no });
 });
@@ -178,11 +187,14 @@ docApp.post("/api/documents/issue", async (c) => {
 
   const { idempotency_key, warehouse_id, doc_date, ref_text, note, lines } = parsed.data;
 
-  // idempotency check
+  // idempotency check — เฉพาะ POSTED เท่านั้น
   const existing = await c.env.DB.prepare(
-    "SELECT id, status FROM documents WHERE idempotency_key=? AND doc_type='ISSUE'",
+    "SELECT id, status FROM documents WHERE idempotency_key=? AND doc_type='ISSUE' AND status='POSTED'",
   ).bind(idempotency_key).first() as { id: number; status: string } | null;
   if (existing) return c.json(buildIdempotencyResponse(existing));
+  await c.env.DB.prepare(
+    "DELETE FROM documents WHERE idempotency_key=? AND doc_type='ISSUE' AND status='DRAFT'",
+  ).bind(idempotency_key).run();
 
   // normalize lot_id: ใช้ sentinel 0 แทน null
   const linesNorm = lines.map(l => ({ ...l, lot_id: l.lot_id ?? 0 }));
@@ -252,7 +264,12 @@ docApp.post("/api/documents/issue", async (c) => {
       .bind(session.userId, nowIso, doc_id),
   );
 
-  await c.env.DB.batch(stmts);
+  try {
+    await c.env.DB.batch(stmts);
+  } catch (err) {
+    await c.env.DB.prepare("DELETE FROM documents WHERE id=? AND status='DRAFT'").bind(doc_id).run();
+    throw err;
+  }
 
   return c.json({ ok: true, doc_id, doc_no });
 });
@@ -336,14 +353,7 @@ docApp.post("/api/documents/:id/cancel", async (c) => {
   const yymm = doc.doc_date.slice(2, 4) + doc.doc_date.slice(5, 7);
 
   // สร้าง CANCEL document
-  await c.env.DB.prepare(
-    `INSERT INTO doc_sequences (doc_type, yymm, last_no) VALUES ('CANCEL',?,1)
-     ON CONFLICT(doc_type, yymm) DO UPDATE SET last_no=last_no+1`,
-  ).bind(yymm).run();
-  const seqRow = await c.env.DB.prepare(
-    "SELECT last_no FROM doc_sequences WHERE doc_type='CANCEL' AND yymm=?",
-  ).bind(yymm).first() as { last_no: number };
-  const cancel_no = buildDocNo("CANCEL", yymm, seqRow.last_no);
+  const cancel_no = await nextDocNo(c.env.DB, "CANCEL", yymm);
 
   const cancelResult = await c.env.DB.prepare(
     `INSERT INTO documents (doc_type, doc_no, doc_date, warehouse_id, status, ref_text, idempotency_key, created_by)
