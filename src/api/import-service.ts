@@ -58,12 +58,23 @@ importApp.post("/api/import/opening", async (c) => {
     return c.json({ ok: true, already_imported: true });
   }
 
-  // โหลด units และ warehouses สำหรับ validation
-  const unitRows = await c.env.DB.prepare("SELECT code FROM units").all();
-  const warehouseRows = await c.env.DB.prepare("SELECT code, id FROM warehouses WHERE is_active=1").all();
-  const knownUnitCodes = new Set(unitRows.results.map((r: any) => r.code as string));
-  const knownWarehouseCodes = new Set(warehouseRows.results.map((r: any) => r.code as string));
-  const warehouseIdByCode = new Map(warehouseRows.results.map((r: any) => [r.code as string, r.id as number]));
+  // โหลด units และ warehouses สำหรับ validation (รองรับทั้ง code และ name_th)
+  const unitRows = await c.env.DB.prepare("SELECT code, name_th FROM units").all();
+  const warehouseRows = await c.env.DB.prepare("SELECT code, name, id FROM warehouses WHERE is_active=1").all();
+  const unitNameToCode = new Map(unitRows.results.map((r: any) => [r.name_th as string, r.code as string]));
+  const warehouseNameToCode = new Map(warehouseRows.results.map((r: any) => [r.name as string, r.code as string]));
+  const knownUnitCodes = new Set([
+    ...unitRows.results.map((r: any) => r.code as string),
+    ...unitRows.results.map((r: any) => r.name_th as string),
+  ]);
+  const knownWarehouseCodes = new Set([
+    ...warehouseRows.results.map((r: any) => r.code as string),
+    ...warehouseRows.results.map((r: any) => r.name as string),
+  ]);
+  const warehouseIdByCode = new Map([
+    ...warehouseRows.results.map((r: any) => [r.code as string, r.id as number] as [string, number]),
+    ...warehouseRows.results.map((r: any) => [r.name as string, r.id as number] as [string, number]),
+  ]);
 
   // validate
   const { valid, errors } = validateImportRows(rows, knownUnitCodes, knownWarehouseCodes);
@@ -72,6 +83,12 @@ importApp.post("/api/import/opening", async (c) => {
   }
   if (valid.length === 0) {
     return c.json({ ok: false, errors: [{ rowNum: 0, errors: ["ไม่มีแถวที่ถูกต้อง"] }] }, 422);
+  }
+
+  // แปลง name → code สำหรับ unit และ warehouse
+  for (const row of valid) {
+    row.unit_code = unitNameToCode.get(row.unit_code) ?? row.unit_code;
+    row.warehouse_code = warehouseNameToCode.get(row.warehouse_code) ?? row.warehouse_code;
   }
 
   const nowIso = new Date().toISOString();
