@@ -14,15 +14,13 @@ function fmtCost(v: number | null | undefined) {
 }
 
 // แปลงแถวข้อมูลก่อนแสดงผลและ export — qty_milli → qty, avg_cost_x4 → avg_cost, total_value_x4 → total_value
-function transformRow(row: Record<string, any>, forExport = false) {
+function transformRow(row: Record<string, any>, _forExport = false) {
   const out: Record<string, any> = {};
   for (const [k, v] of Object.entries(row)) {
     if (k.endsWith("_milli")) {
-      const label = k.replace(/_milli$/, "");
-      out[label] = forExport ? (v as number) / 1000 : v;
+      out[k.replace(/_milli$/, "")] = (v as number) / 1000;
     } else if (k.endsWith("_x4")) {
-      const label = k.replace(/_x4$/, "");
-      out[label] = forExport ? (v as number) / 10000 : v;
+      out[k.replace(/_x4$/, "")] = (v as number) / 10000;
     } else {
       out[k] = v;
     }

@@ -4,6 +4,13 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-bugfix2] - 2026-11-01
+
+### Fixed
+- `import-service.ts`: auto-create หน่วย/คลัง ใช้ `r["หน่วย"]` และ `r["คลัง"]` แทน `r.unit_code`/`r.warehouse_code` (rows จาก Excel ใช้ key ภาษาไทย)
+- `documents-service.ts`: direction `-1` อยู่ผิดตำแหน่งใน VALUES (ตำแหน่ง 5 แทนที่จะเป็น 6) ทำให้ CHECK constraint fail เมื่อตัดออก
+- `Reports.tsx`: `transformRow` แปลง `_milli`/`_x4` เสมอ ไม่ใช่แค่ตอน export ทำให้ตัวเลขในหน้าจอถูกต้อง
+
 ## [0.1.0-d5] - 2026-10-31
 
 ### Added (D5 — รายงานสรุป + ทดสอบติดตั้ง)

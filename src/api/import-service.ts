@@ -77,7 +77,8 @@ importApp.post("/api/import/opening", async (c) => {
   ]);
 
   // auto-create หน่วยและคลังที่ยังไม่มีในระบบ
-  const allUnitKeys = new Set([...rows.map((r: any) => String(r.unit_code ?? "").trim()).filter(Boolean)]);
+  // rows ใช้ชื่อคอลัมน์ภาษาไทยจาก Excel ("หน่วย", "คลัง")
+  const allUnitKeys = new Set([...rows.map((r: any) => String(r["หน่วย"] ?? "").trim()).filter(Boolean)]);
   for (const key of allUnitKeys) {
     if (!knownUnitCodes.has(key)) {
       const code = key.toUpperCase().slice(0, 10);
@@ -89,7 +90,7 @@ importApp.post("/api/import/opening", async (c) => {
       knownUnitCodes.add(code);
     }
   }
-  const allWhKeys = new Set([...rows.map((r: any) => String(r.warehouse_code ?? "").trim()).filter(Boolean)]);
+  const allWhKeys = new Set([...rows.map((r: any) => String(r["คลัง"] ?? "").trim()).filter(Boolean)]);
   for (const key of allWhKeys) {
     if (!knownWarehouseCodes.has(key)) {
       const code = key.toUpperCase().replace(/\s+/g, "").slice(0, 10);
