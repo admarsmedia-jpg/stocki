@@ -62,7 +62,7 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-white border-b border-gray-200 shadow-sm px-6 py-0 flex items-center gap-1 print:hidden" style={{minHeight:"52px"}}>
-        <span className="font-extrabold text-lg mr-5" style={{color:"#FF6200",letterSpacing:"-0.5px"}}>Stocki</span>
+        <span className="font-extrabold text-lg mr-5" style={{color:"#FF6200",letterSpacing:"-0.5px"}}>Stocki!</span>
         {(["items","receive","issue","reports"] as Page[]).concat(isOwner ? ["import" as Page] : []).map((p) => {
           const labels: Record<Page, string> = { items:"สินค้า", import:"นำเข้า Excel", receive:"รับสินค้า", issue:"ตัดออก", reports:"รายงาน", document:"เอกสาร" };
           if (p === "import" && !isOwner) return null;
