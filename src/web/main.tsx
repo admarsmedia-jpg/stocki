@@ -92,6 +92,11 @@ function App() {
         {page === "reports" && <Reports />}
         {page === "document" && docId && <DocumentDetail docId={docId} onBack={nav("items")} />}
       </main>
+      <footer className="print:hidden border-t border-gray-200 bg-white mt-8 py-4 px-6 text-center text-xs text-gray-400">
+        <span style={{color:"#FF6200",fontWeight:700}}>Stocki!</span> — ระบบสต็อกสินค้าโอเพ่นซอร์ส ฟรีตลอดชีพ
+        <span className="mx-2">·</span>
+        © 2026 Mars Media. สงวนลิขสิทธิ์.
+      </footer>
     </div>
   );
 }
