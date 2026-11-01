@@ -4,6 +4,15 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-bugfix5] - 2026-11-01
+
+### Fixed
+- **migration 0004_fix_duplicate_balances.sql**: แก้ UNIQUE constraint ที่ทำให้ migration 0003 ล้มเหลวบน remote DB
+  remote DB มี duplicate rows ใน stock_balances (หลาย lot_id=NULL ต่อ item+warehouse เดิม)
+  เกิดจาก ON CONFLICT ไม่ทำงานกับ NULL ใน composite PK ก่อนจะ fix ด้วย sentinel
+  migration 0004 ใช้ `GROUP BY + SUM qty + weighted avg cost` รวม duplicate ก่อน rename
+  พร้อม `DROP TABLE IF EXISTS stock_balances_new/stock_movements_new` ล้าง table กลางที่ค้างจาก 0003
+
 ## [0.1.0-bugfix4] - 2026-11-01
 
 ### Fixed
