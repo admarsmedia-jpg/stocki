@@ -92,10 +92,27 @@ function App() {
         {page === "reports" && <Reports />}
         {page === "document" && docId && <DocumentDetail docId={docId} onBack={nav("items")} />}
       </main>
-      <footer className="print:hidden border-t border-gray-200 bg-white mt-8 py-4 px-6 text-center text-xs text-gray-400">
-        <span style={{color:"#FF6200",fontWeight:700}}>Stocki!</span> — ระบบสต็อกสินค้าโอเพ่นซอร์ส ฟรีตลอดชีพ
-        <span className="mx-2">·</span>
-        © 2026 Mars Media. สงวนลิขสิทธิ์.
+      <footer className="print:hidden border-t border-gray-200 bg-white mt-8 text-xs text-gray-400">
+        <div className="py-6 px-6 flex flex-wrap justify-center gap-6 border-b border-gray-100">
+          {[
+            { href:"https://www.marsmedia.co.th/barcode-101-what-is-barcode/", icon:"🔢", label:"Barcode 101", desc:"บาร์โค้ดคืออะไร?" },
+            { href:"https://www.marsmedia.co.th/hardware/", icon:"📷", label:"เครื่องอ่านบาร์โค้ด", desc:"สแกนเนอร์ทุกรุ่น" },
+            { href:"https://www.marsmedia.co.th/tsc-te-series-barcode-printer/", icon:"🖨️", label:"เครื่องพิมพ์ความร้อน", desc:"พิมพ์ฉลากบาร์โค้ด" },
+            { href:"https://www.marsmedia.co.th/media/", icon:"🏷️", label:"สติกเกอร์ ริบบอน RFID", desc:"วัสดุสิ้นเปลือง" },
+          ].map(({href,icon,label,desc}) => (
+            <a key={href} href={href} target="_blank" rel="noopener noreferrer"
+              className="flex flex-col items-center gap-1 w-28 hover:opacity-70 transition-opacity no-underline text-gray-500">
+              <span className="text-2xl">{icon}</span>
+              <span className="font-semibold text-gray-700 text-center leading-tight">{label}</span>
+              <span className="text-center leading-tight">{desc}</span>
+            </a>
+          ))}
+        </div>
+        <div className="py-3 px-6 text-center">
+          <span style={{color:"#FF6200",fontWeight:700}}>Stocki!</span> — ระบบสต็อกสินค้าโอเพ่นซอร์ส ฟรีตลอดชีพ
+          <span className="mx-2">·</span>
+          © 2026 Mars Media. สงวนลิขสิทธิ์.
+        </div>
       </footer>
     </div>
   );
