@@ -14,7 +14,7 @@ type LineItem = {
   lot_manufacturer_name?: string;
 };
 
-type Item = { id: number; sku: string; name_th: string; barcode: string; track_lot: number };
+type Item = { id: number; sku: string; name_th: string; barcode: string; track_lot: number; standard_cost_x4: number };
 type Lot = { id: number; lot_no: string; expiry_date: string };
 
 export default function Receive({ navigate }: { navigate: (path: string) => void }) {
@@ -28,7 +28,7 @@ export default function Receive({ navigate }: { navigate: (path: string) => void
   const [lines, setLines] = useState<LineItem[]>([]);
   const [pendingItem, setPendingItem] = useState<Item | null>(null);
   const [pendingQty, setPendingQty] = useState("1");
-  const [pendingCost, setPendingCost] = useState("0");
+  const [pendingCost, setPendingCost] = useState("");
   const [pendingLotNo, setPendingLotNo] = useState("");
   const [pendingExpiry, setPendingExpiry] = useState("");
   const [pendingMfg, setPendingMfg] = useState("");
@@ -59,6 +59,8 @@ export default function Receive({ navigate }: { navigate: (path: string) => void
     const item = (r.items ?? []).find((i: Item) => i.barcode === barcode || i.sku === barcode);
     if (!item) { setError(`ไม่พบสินค้า: ${barcode}`); return; }
     setPendingItem(item);
+    const stdCost = item.standard_cost_x4 ? (item.standard_cost_x4 / 10000).toFixed(2) : "";
+    setPendingCost(stdCost);
     setError("");
     setBarcodeInput("");
   }

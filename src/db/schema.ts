@@ -104,7 +104,7 @@ export const document_lines = sqliteTable("document_lines", {
 export const stock_movements = sqliteTable("stock_movements", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   document_id: integer("document_id").notNull().references(() => documents.id),
-  line_id: integer("line_id").notNull().references(() => document_lines.id),
+  line_id: integer("line_id").references(() => document_lines.id),
   item_id: integer("item_id").notNull().references(() => items.id),
   lot_id: integer("lot_id").references(() => lots.id),
   warehouse_id: integer("warehouse_id").notNull().references(() => warehouses.id),

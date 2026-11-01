@@ -76,6 +76,35 @@ importApp.post("/api/import/opening", async (c) => {
     ...warehouseRows.results.map((r: any) => [r.name as string, r.id as number] as [string, number]),
   ]);
 
+  // auto-create หน่วยและคลังที่ยังไม่มีในระบบ
+  const allUnitKeys = new Set([...rows.map((r: any) => String(r.unit_code ?? "").trim()).filter(Boolean)]);
+  for (const key of allUnitKeys) {
+    if (!knownUnitCodes.has(key)) {
+      const code = key.toUpperCase().slice(0, 10);
+      await c.env.DB.prepare(
+        `INSERT OR IGNORE INTO units (code, name_th, decimal_places) VALUES (?,?,0)`,
+      ).bind(code, key).run();
+      unitNameToCode.set(key, code);
+      knownUnitCodes.add(key);
+      knownUnitCodes.add(code);
+    }
+  }
+  const allWhKeys = new Set([...rows.map((r: any) => String(r.warehouse_code ?? "").trim()).filter(Boolean)]);
+  for (const key of allWhKeys) {
+    if (!knownWarehouseCodes.has(key)) {
+      const code = key.toUpperCase().replace(/\s+/g, "").slice(0, 10);
+      const res = await c.env.DB.prepare(
+        `INSERT OR IGNORE INTO warehouses (code, name, is_active) VALUES (?,?,1)`,
+      ).bind(code, key).run();
+      const wid = res.meta.last_row_id as number;
+      warehouseNameToCode.set(key, code);
+      warehouseIdByCode.set(key, wid);
+      warehouseIdByCode.set(code, wid);
+      knownWarehouseCodes.add(key);
+      knownWarehouseCodes.add(code);
+    }
+  }
+
   // validate
   const { valid, errors } = validateImportRows(rows, knownUnitCodes, knownWarehouseCodes);
   if (errors.length > 0) {

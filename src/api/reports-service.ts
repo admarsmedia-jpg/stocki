@@ -21,7 +21,7 @@ reportsApp.get("/balance", async (c) => {
            l.lot_no, l.expiry_date,
            COALESCE(sb.qty_on_hand_milli,0) as qty_on_hand_milli,
            COALESCE(sb.avg_cost_x4,0) as avg_cost_x4,
-           u.code as unit
+           u.name_th as unit
     FROM items i
     LEFT JOIN categories cat ON cat.id=i.category_id
     LEFT JOIN units u ON u.id=i.unit_id
@@ -45,7 +45,7 @@ reportsApp.get("/balance/export", async (c) => {
            l.lot_no, l.expiry_date,
            COALESCE(sb.qty_on_hand_milli,0) as qty_on_hand_milli,
            COALESCE(sb.avg_cost_x4,0) as avg_cost_x4,
-           u.code as unit
+           u.name_th as unit
     FROM items i
     LEFT JOIN categories cat ON cat.id=i.category_id
     LEFT JOIN units u ON u.id=i.unit_id
@@ -150,7 +150,7 @@ reportsApp.get("/lots", async (c) => {
            w.name as warehouse,
            COALESCE(sb.qty_on_hand_milli,0) as qty_on_hand_milli,
            ${role === "OWNER" ? "COALESCE(sb.avg_cost_x4,0) as avg_cost_x4," : ""}
-           u.code as unit
+           u.name_th as unit
     FROM lots l
     JOIN items i ON i.id=l.item_id
     LEFT JOIN units u ON u.id=i.unit_id
@@ -169,7 +169,7 @@ reportsApp.get("/expiring", async (c) => {
   const rows = await c.env.DB.prepare(`
     SELECT i.sku, i.name_th, l.lot_no, l.expiry_date,
            COALESCE(sb.qty_on_hand_milli,0) as qty_on_hand_milli,
-           w.name as warehouse, u.code as unit
+           w.name as warehouse, u.name_th as unit
     FROM lots l
     JOIN items i ON i.id=l.item_id
     LEFT JOIN units u ON u.id=i.unit_id
@@ -188,7 +188,7 @@ reportsApp.get("/reorder", async (c) => {
     SELECT i.sku, i.name_th,
            i.reorder_point_milli,
            SUM(COALESCE(sb.qty_on_hand_milli,0)) as total_qty_milli,
-           u.code as unit
+           u.name_th as unit
     FROM items i
     LEFT JOIN stock_balances sb ON sb.item_id=i.id AND sb.lot_id IS NULL
     LEFT JOIN units u ON u.id=i.unit_id

@@ -31,7 +31,7 @@ function transformRow(row: Record<string, any>, forExport = false) {
 }
 
 const COL_LABELS: Record<string, string> = {
-  item_id: "ID",
+  item_id: "No.",
   sku: "รหัส",
   name_th: "ชื่อสินค้า",
   category: "หมวด",
