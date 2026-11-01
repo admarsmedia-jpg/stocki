@@ -2,12 +2,16 @@ import { useState, useRef, useEffect } from "react";
 
 type LineItem = {
   item_id: number;
-  lot_id: number | null;
+  lot_id: null;
   sku: string;
   name_th: string;
   qty_milli: number;
   unit_cost_x4: number;
   lot_no?: string;
+  lot_mfg_date?: string;
+  lot_expiry_date?: string;
+  lot_po_no?: string;
+  lot_manufacturer_name?: string;
 };
 
 type Item = { id: number; sku: string; name_th: string; barcode: string; track_lot: number };
@@ -66,40 +70,25 @@ export default function Receive({ navigate }: { navigate: (path: string) => void
     if (isNaN(qty) || qty <= 0) { setError("จำนวนต้องมากกว่า 0"); return; }
     if (isNaN(cost) || cost < 0) { setError("ต้นทุนต้องไม่ติดลบ"); return; }
 
-    let lot_id: number | null = null;
-    let lot_no_display: string | undefined;
-
     if (pendingItem.track_lot) {
       if (!pendingLotNo || !pendingExpiry || !pendingMfg) {
         setError("สินค้านี้ใช้ล็อต — กรุณากรอก Lot No., วันผลิต, วันหมดอายุ");
         return;
       }
-      // upsert lot via API and get lot_id
-      const r = await fetch("/api/lots", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          item_id: pendingItem.id,
-          lot_no: pendingLotNo,
-          mfg_date: pendingMfg,
-          expiry_date: pendingExpiry,
-          po_no: pendingPO,
-          manufacturer_name: pendingMfgName,
-        }),
-      }).then(r => r.json());
-      if (!r.ok) { setError(r.error || "สร้างล็อตไม่สำเร็จ"); return; }
-      lot_id = r.lot_id;
-      lot_no_display = pendingLotNo;
     }
 
     setLines(prev => [...prev, {
       item_id: pendingItem!.id,
-      lot_id,
+      lot_id: null,
       sku: pendingItem!.sku,
       name_th: pendingItem!.name_th,
       qty_milli: qty,
       unit_cost_x4: cost,
-      lot_no: lot_no_display,
+      lot_no: pendingItem!.track_lot ? pendingLotNo : undefined,
+      lot_mfg_date: pendingItem!.track_lot ? pendingMfg : undefined,
+      lot_expiry_date: pendingItem!.track_lot ? pendingExpiry : undefined,
+      lot_po_no: pendingItem!.track_lot ? pendingPO : undefined,
+      lot_manufacturer_name: pendingItem!.track_lot ? pendingMfgName : undefined,
     }]);
 
     setPendingItem(null);
@@ -129,7 +118,16 @@ export default function Receive({ navigate }: { navigate: (path: string) => void
           warehouse_id: warehouseId,
           doc_date: docDate,
           ref_text: refText || undefined,
-          lines: lines.map(l => ({ item_id: l.item_id, lot_id: l.lot_id, qty_milli: l.qty_milli, unit_cost_x4: l.unit_cost_x4 })),
+          lines: lines.map(l => ({
+            item_id: l.item_id,
+            qty_milli: l.qty_milli,
+            unit_cost_x4: l.unit_cost_x4,
+            lot_no: l.lot_no,
+            lot_mfg_date: l.lot_mfg_date,
+            lot_expiry_date: l.lot_expiry_date,
+            lot_po_no: l.lot_po_no,
+            lot_manufacturer_name: l.lot_manufacturer_name,
+          })),
         }),
       }).then(r => r.json());
       if (!r.ok) throw new Error(r.error || JSON.stringify(r.errors));

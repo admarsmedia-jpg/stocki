@@ -29,7 +29,7 @@ const rowSchema = z.object({
 
 const batchSchema = z.object({
   idempotency_key: z.string().min(1).max(128),
-  rows: z.array(z.record(z.unknown())).min(1).max(500),
+  rows: z.array(z.record(z.unknown())).min(1).max(5000),
 });
 
 /**
@@ -50,12 +50,12 @@ importApp.post("/api/import/opening", async (c) => {
 
   const { idempotency_key, rows } = parsed.data;
 
-  // ตรวจ idempotency — ถ้าเคยทำแล้ว return เดิม
+  // ตรวจ idempotency — ถ้าเคยทำแล้ว return already_imported
   const existing = await c.env.DB.prepare(
-    "SELECT id, status FROM documents WHERE idempotency_key=? AND doc_type='OPENING'",
-  ).bind(idempotency_key).first() as { id: number; status: string } | null;
+    "SELECT id FROM documents WHERE idempotency_key=? AND doc_type='OPENING' LIMIT 1",
+  ).bind(idempotency_key).first() as { id: number } | null;
   if (existing) {
-    return c.json({ ok: true, idempotent: true, doc_id: existing.id });
+    return c.json({ ok: true, already_imported: true });
   }
 
   // โหลด units และ warehouses สำหรับ validation
@@ -161,20 +161,25 @@ importApp.post("/api/import/opening", async (c) => {
         lot_id = lotRow.id;
       }
 
-      // ตรวจว่ายอดยกมามีแล้วหรือยัง (idempotency ระดับแถว)
+      // ตรวจว่ายอดยกมามีแล้วหรือยัง — ถ้ามีแล้วถือเป็น error ของแถวนั้น
       const existingBalance = await c.env.DB.prepare(
-        `SELECT qty_on_hand_milli FROM stock_balances
-         WHERE item_id=? AND lot_id IS ? AND warehouse_id=?`,
-      ).bind(item_id, lot_id, warehouse_id).first() as { qty_on_hand_milli: number } | null;
+        `SELECT 1 FROM stock_movements sm
+         JOIN documents d ON d.id=sm.document_id
+         WHERE d.doc_type='OPENING' AND sm.item_id=? AND sm.lot_id IS ? AND sm.warehouse_id=?
+         LIMIT 1`,
+      ).bind(item_id, lot_id, warehouse_id).first();
 
-      if (!existingBalance) {
-        lineInputs.push({
-          item_id,
-          lot_id,
-          qty_milli: Math.round(row.qty * 1000),
-          unit_cost_x4: Math.round(row.unit_cost * 10000),
-        });
+      if (existingBalance) {
+        // ข้ามแถวที่มียอดยกมาแล้ว (ไม่สร้างซ้ำ)
+        continue;
       }
+
+      lineInputs.push({
+        item_id,
+        lot_id,
+        qty_milli: Math.round(row.qty * 1000),
+        unit_cost_x4: Math.round(row.unit_cost * 10000),
+      });
     }
 
     if (lineInputs.length === 0) continue;

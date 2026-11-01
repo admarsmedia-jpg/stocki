@@ -5,6 +5,7 @@ type LotOption = {
   lot_no: string;
   expiry_date: string;
   qty_on_hand_milli: number;
+  is_expired: number;
 };
 
 type LineItem = {
@@ -195,7 +196,7 @@ export default function Issue({ navigate }: { navigate: (path: string) => void }
                     onChange={e => setPendingLotId(Number(e.target.value))}>
                     {lotOptions.map(l => (
                       <option key={l.id} value={l.id}>
-                        {l.lot_no} — หมด {l.expiry_date} (คงเหลือ {(l.qty_on_hand_milli / 1000).toFixed(3)})
+                        {l.is_expired ? "⚠️ หมดอายุ " : ""}{l.lot_no} — หมด {l.expiry_date} (คงเหลือ {(l.qty_on_hand_milli / 1000).toFixed(3)})
                       </option>
                     ))}
                   </select>

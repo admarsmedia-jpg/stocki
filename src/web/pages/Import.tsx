@@ -22,6 +22,7 @@ export default function Import() {
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [errors, setErrors] = useState<RowError[]>([]);
   const [status, setStatus] = useState<"idle" | "preview" | "loading" | "done" | "error">("idle");
+  const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState("");
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -47,31 +48,36 @@ export default function Import() {
     reader.readAsArrayBuffer(file);
   }
 
+  async function computeFileHash(file: File): Promise<string> {
+    const buf = await file.arrayBuffer();
+    const hashBuf = await crypto.subtle.digest("SHA-256", buf);
+    return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+
   async function handleImport() {
-    if (rows.length === 0) return;
-    setStatus("loading");
+    if (rows.length === 0 || !fileRef.current?.files?.[0]) return;
+    setImporting(true);
 
-    const idempotency_key = `import-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const CHUNK = 500;
-    let allErrors: RowError[] = [];
+    const hash = await computeFileHash(fileRef.current.files[0]);
+    const idempotency_key = `import-${hash}`;
+    const res = await fetch("/api/import/opening", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idempotency_key, rows }),
+    });
+    const json = await res.json() as any;
 
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const chunk = rows.slice(i, i + CHUNK);
-      const res = await fetch("/api/import/opening", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idempotency_key: `${idempotency_key}-${i}`, rows: chunk }),
-      });
-      const json = await res.json() as any;
-      if (!json.ok && json.errors) {
-        allErrors = allErrors.concat(json.errors);
-      }
+    setImporting(false);
+    if (json.already_imported) {
+      setStatus("done");
+      setMessage("ไฟล์นี้นำเข้าไปแล้ว (ไม่ซ้ำ)");
+      return;
     }
 
-    if (allErrors.length > 0) {
-      setErrors(allErrors);
+    if (!json.ok && json.errors) {
+      setErrors(json.errors);
       setStatus("error");
-      setMessage(`พบ ${allErrors.length} แถวผิดพลาด`);
+      setMessage(`พบ ${json.errors.length} แถวผิดพลาด`);
     } else {
       setStatus("done");
       setMessage("นำเข้าสำเร็จ");
@@ -121,9 +127,10 @@ export default function Import() {
           {rows.length > 20 && <p className="text-xs text-gray-400 mt-1">แสดง 20 จาก {rows.length} แถว</p>}
           <button
             onClick={handleImport}
-            className="mt-3 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            disabled={importing}
+            className="mt-3 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
           >
-            ยืนยันนำเข้า
+            {importing ? "กำลังนำเข้า..." : "ยืนยันนำเข้า"}
           </button>
         </div>
       )}

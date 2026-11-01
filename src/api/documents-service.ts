@@ -17,13 +17,25 @@ const lineSchema = z.object({
   unit_cost_x4: z.number().int().min(0).default(0),
 });
 
+const receiveLineSchema = z.object({
+  item_id: z.number().int().positive(),
+  qty_milli: z.number().int().positive(),
+  unit_cost_x4: z.number().int().min(0).default(0),
+  // ล็อต — ถ้ามีจะสร้างใน transaction เดียวกัน
+  lot_no: z.string().max(100).optional(),
+  lot_mfg_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  lot_expiry_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  lot_po_no: z.string().max(100).optional(),
+  lot_manufacturer_name: z.string().max(200).optional(),
+});
+
 const receiveSchema = z.object({
   idempotency_key: z.string().min(1).max(128),
   warehouse_id: z.number().int().positive(),
   doc_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   ref_text: z.string().max(200).optional(),
   note: z.string().max(500).optional(),
-  lines: z.array(lineSchema).min(1).max(200),
+  lines: z.array(receiveLineSchema).min(1).max(200),
 });
 
 const issueSchema = z.object({
@@ -89,6 +101,24 @@ docApp.post("/api/documents/receive", async (c) => {
   const doc_no = await nextDocNo(c.env.DB, "RECEIVE", yymm);
   const nowIso = new Date().toISOString();
 
+  // resolve lot_id สำหรับแต่ละ line ที่มีข้อมูลล็อต (upsert ก่อน batch)
+  const resolvedLines: Array<{ item_id: number; lot_id: number | null; qty_milli: number; unit_cost_x4: number }> = [];
+  for (const line of lines) {
+    let lot_id: number | null = null;
+    if (line.lot_no) {
+      await c.env.DB.prepare(
+        `INSERT INTO lots (item_id, lot_no, mfg_date, expiry_date, po_no, manufacturer_name, created_at)
+         VALUES (?,?,?,?,?,?,?)
+         ON CONFLICT(item_id, lot_no) DO NOTHING`,
+      ).bind(line.item_id, line.lot_no, line.lot_mfg_date ?? null, line.lot_expiry_date ?? null, line.lot_po_no ?? null, line.lot_manufacturer_name ?? null, nowIso).run();
+      const lotRow = await c.env.DB.prepare(
+        "SELECT id FROM lots WHERE item_id=? AND lot_no=?",
+      ).bind(line.item_id, line.lot_no).first() as { id: number } | null;
+      if (lotRow) lot_id = lotRow.id;
+    }
+    resolvedLines.push({ item_id: line.item_id, lot_id, qty_milli: line.qty_milli, unit_cost_x4: line.unit_cost_x4 });
+  }
+
   // สร้าง document
   const docResult = await c.env.DB.prepare(
     `INSERT INTO documents (doc_type, doc_no, doc_date, warehouse_id, status, ref_text, note, idempotency_key, created_by)
@@ -97,10 +127,10 @@ docApp.post("/api/documents/receive", async (c) => {
 
   const doc_id = docResult.meta.last_row_id;
 
-  const snap = await loadBalanceSnapshot(c.env.DB, warehouse_id, lines);
+  const snap = await loadBalanceSnapshot(c.env.DB, warehouse_id, resolvedLines);
 
   const { lineUpdates } = computePostDocumentUpdates(
-    { doc_id, warehouse_id, movement_date: doc_date, direction: 1, lines, user_id: session.userId },
+    { doc_id, warehouse_id, movement_date: doc_date, direction: 1, lines: resolvedLines, user_id: session.userId },
     snap,
   );
 
@@ -365,14 +395,17 @@ docApp.get("/api/lots/suggest", async (c) => {
   const { item_id, warehouse_id } = c.req.query();
   if (!item_id || !warehouse_id) return c.json({ error: "missing_params" }, 400);
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const rows = await c.env.DB.prepare(
     `SELECT l.id, l.lot_no, l.expiry_date, l.mfg_date, l.po_no, l.manufacturer_name,
-            sb.qty_on_hand_milli, sb.avg_cost_x4
+            sb.qty_on_hand_milli, sb.avg_cost_x4,
+            CASE WHEN l.expiry_date < ? THEN 1 ELSE 0 END AS is_expired
      FROM lots l
      INNER JOIN stock_balances sb ON sb.lot_id=l.id AND sb.item_id=? AND sb.warehouse_id=?
      WHERE l.item_id=? AND sb.qty_on_hand_milli > 0
      ORDER BY l.expiry_date ASC`,
-  ).bind(Number(item_id), Number(warehouse_id), Number(item_id)).all();
+  ).bind(today, Number(item_id), Number(warehouse_id), Number(item_id)).all();
 
   return c.json({ ok: true, lots: rows.results });
 });
