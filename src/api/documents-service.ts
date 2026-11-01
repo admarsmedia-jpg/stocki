@@ -143,7 +143,7 @@ docApp.post("/api/documents/receive", async (c) => {
     c.env.DB.prepare(
       `INSERT INTO stock_movements (document_id, item_id, lot_id, warehouse_id, movement_date, direction, qty_milli, unit_cost_x4, balance_qty_after_milli, avg_cost_after_x4)
        VALUES (?,?,?,?,?,1,?,?,?,?)`,
-    ).bind(doc_id, lu.item_id, lu.lot_id || null, warehouse_id, doc_date, lu.qty_milli, lu.unit_cost_x4, lu.new_qty, lu.new_avg_cost),
+    ).bind(doc_id, lu.item_id, lu.lot_id, warehouse_id, doc_date, lu.qty_milli, lu.unit_cost_x4, lu.new_qty, lu.new_avg_cost),
 
     c.env.DB.prepare(
       `INSERT INTO stock_balances (item_id, lot_id, warehouse_id, qty_on_hand_milli, avg_cost_x4, updated_at)
@@ -238,7 +238,7 @@ docApp.post("/api/documents/issue", async (c) => {
     c.env.DB.prepare(
       `INSERT INTO stock_movements (document_id, item_id, lot_id, warehouse_id, movement_date, direction, qty_milli, unit_cost_x4, balance_qty_after_milli, avg_cost_after_x4)
        VALUES (?,?,?,?,?,-1,?,?,?,?)`,
-    ).bind(doc_id, lu.item_id, lu.lot_id || null, warehouse_id, doc_date, lu.qty_milli, lu.unit_cost_x4, lu.new_qty, lu.new_avg_cost),
+    ).bind(doc_id, lu.item_id, lu.lot_id, warehouse_id, doc_date, lu.qty_milli, lu.unit_cost_x4, lu.new_qty, lu.new_avg_cost),
 
     // WHERE qty >= qty_milli ป้องกัน race condition
     c.env.DB.prepare(
@@ -377,7 +377,7 @@ docApp.post("/api/documents/:id/cancel", async (c) => {
     c.env.DB.prepare(
       `INSERT INTO stock_movements (document_id, item_id, lot_id, warehouse_id, movement_date, direction, qty_milli, unit_cost_x4, balance_qty_after_milli, avg_cost_after_x4)
        VALUES (?,?,?,?,?,?,?,?,?,?)`,
-    ).bind(cancel_id, lu.item_id, lu.lot_id || null, doc.warehouse_id, doc.doc_date, reverseDir, lu.qty_milli, lu.unit_cost_x4, lu.new_qty, lu.new_avg_cost),
+    ).bind(cancel_id, lu.item_id, lu.lot_id, doc.warehouse_id, doc.doc_date, reverseDir, lu.qty_milli, lu.unit_cost_x4, lu.new_qty, lu.new_avg_cost),
 
     c.env.DB.prepare(
       `INSERT INTO stock_balances (item_id, lot_id, warehouse_id, qty_on_hand_milli, avg_cost_x4, updated_at)

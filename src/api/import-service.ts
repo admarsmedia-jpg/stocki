@@ -266,7 +266,7 @@ importApp.post("/api/import/opening", async (c) => {
       const movStmt = c.env.DB.prepare(
         `INSERT INTO stock_movements (document_id, item_id, lot_id, warehouse_id, movement_date, direction, qty_milli, unit_cost_x4, balance_qty_after_milli, avg_cost_after_x4)
          VALUES (?,?,?,?,?,1,?,?,?,?)`,
-      ).bind(doc_id, lu.item_id, lu.lot_id || null, lu.warehouse_id, docDate, lu.qty_milli, lu.unit_cost_x4, lu.new_qty, lu.new_avg_cost);
+      ).bind(doc_id, lu.item_id, lu.lot_id, lu.warehouse_id, docDate, lu.qty_milli, lu.unit_cost_x4, lu.new_qty, lu.new_avg_cost);
 
       const balStmt = c.env.DB.prepare(
         `INSERT INTO stock_balances (item_id, lot_id, warehouse_id, qty_on_hand_milli, avg_cost_x4, updated_at)
