@@ -357,6 +357,18 @@ app.route("/", importApp);
 app.route("/", docApp);
 app.route("/api/reports", reportsApp);
 
+// ── 404 / error handlers ──────────────────────────────────────────────────────
+app.notFound((c) => {
+  if (c.req.path.startsWith("/api/")) return c.json({ error: "Not found" }, 404);
+  return c.notFound();
+});
+
+app.onError((err, c) => {
+  console.error(err);
+  if (c.req.path.startsWith("/api/")) return c.json({ error: (err as Error).message || "Internal error" }, 500);
+  return c.text("Internal error", 500);
+});
+
 // ── frontend fallback ─────────────────────────────────────────────────────────
 app.get("*", async (c) => {
   try {

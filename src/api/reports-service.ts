@@ -37,6 +37,7 @@ reportsApp.get("/balance", async (c) => {
 
 // ── balance export Excel ──────────────────────────────────────────────────────
 reportsApp.get("/balance/export", async (c) => {
+  if (c.get("session")!.role !== "OWNER") return c.json({ error: "forbidden" }, 403);
   const role = c.get("session")!.role;
   const rows = await c.env.DB.prepare(`
     SELECT i.id as item_id, i.sku, i.name_th,
@@ -57,6 +58,43 @@ reportsApp.get("/balance/export", async (c) => {
   const filtered = filterCostFields(rows.results as any[], role);
   // ส่ง JSON ให้ frontend สร้าง Excel ด้วย SheetJS (เพื่อเลี่ยง CPU limit ของ Worker)
   return c.json({ columns: cols, data: filtered });
+});
+
+// ── movements export ─────────────────────────────────────────────────────────
+reportsApp.get("/movements/export", async (c) => {
+  const session = c.get("session")!;
+  if (session.role !== "OWNER") return c.json({ error: "forbidden" }, 403);
+  const role = session.role;
+  const { date_from, date_to } = c.req.query() as { date_from?: string; date_to?: string };
+  const whereDate = date_from && date_to
+    ? `AND d.doc_date BETWEEN '${date_from}' AND '${date_to}'`
+    : "";
+  const rows = await c.env.DB.prepare(`
+    SELECT i.sku, i.name_th, d.doc_type, d.doc_date,
+           SUM(CASE WHEN sm.direction=1 THEN sm.qty_milli ELSE 0 END) as in_milli,
+           SUM(CASE WHEN sm.direction=-1 THEN sm.qty_milli ELSE 0 END) as out_milli,
+           SUM(sm.qty_milli*sm.unit_cost_x4/1000) as value_x4,
+           w.name as warehouse
+    FROM stock_movements sm
+    JOIN document_lines dl ON dl.id=sm.line_id
+    JOIN documents d ON d.id=sm.document_id
+    JOIN items i ON i.id=sm.item_id
+    JOIN warehouses w ON w.id=sm.warehouse_id
+    WHERE 1=1 ${whereDate}
+    GROUP BY i.id, d.doc_type, d.doc_date, w.id
+    ORDER BY d.doc_date DESC
+  `).all();
+  const cols = [
+    { key: "sku", label: "รหัส" },
+    { key: "name_th", label: "ชื่อสินค้า" },
+    { key: "doc_type", label: "ประเภท" },
+    { key: "doc_date", label: "วันที่" },
+    { key: "warehouse", label: "คลัง" },
+    { key: "in_milli", label: "รับเข้า" },
+    { key: "out_milli", label: "ตัดออก" },
+    { key: "value_x4", label: "มูลค่า" },
+  ];
+  return c.json({ columns: cols, data: rows.results });
 });
 
 // ── movements summary ─────────────────────────────────────────────────────────

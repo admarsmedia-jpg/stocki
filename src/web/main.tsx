@@ -9,8 +9,9 @@ import Import from "./pages/Import";
 import Receive from "./pages/Receive";
 import Reports from "./pages/Reports";
 import Issue from "./pages/Issue";
+import DocumentDetail from "./pages/DocumentDetail";
 
-type Page = "items" | "import" | "receive" | "issue" | "reports";
+type Page = "items" | "import" | "receive" | "issue" | "reports" | "document";
 
 function App() {
   const { user, setUser } = useStore();
@@ -46,11 +47,13 @@ function App() {
     return () => { setPage(p); setDocId(null); };
   }
 
+  const isOwner = user.role === "OWNER";
+
   // minimal router via navigate prop
   const navigateFn = (path: string) => {
     if (path.startsWith("/documents/")) {
       setDocId(Number(path.split("/").pop()));
-      setPage("items");
+      setPage("document");
     } else {
       setPage("items");
     }
@@ -58,10 +61,10 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b px-6 py-3 flex items-center gap-6">
+      <nav className="bg-white border-b px-6 py-3 flex items-center gap-6 print:hidden">
         <span className="font-bold text-gray-800 mr-4">Stocki</span>
         <button onClick={nav("items")} className={`text-sm ${page === "items" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>สินค้า</button>
-        <button onClick={nav("import")} className={`text-sm ${page === "import" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>นำเข้า Excel</button>
+        {isOwner && <button onClick={nav("import")} className={`text-sm ${page === "import" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>นำเข้า Excel</button>}
         <button onClick={nav("receive")} className={`text-sm ${page === "receive" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>รับสินค้า</button>
         <button onClick={nav("issue")} className={`text-sm ${page === "issue" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>ตัดออก</button>
         <button onClick={nav("reports")} className={`text-sm ${page === "reports" ? "font-bold text-blue-700" : "text-gray-600 hover:text-gray-900"}`}>รายงาน</button>
@@ -72,10 +75,11 @@ function App() {
       </nav>
       <main>
         {page === "items" && <Items />}
-        {page === "import" && <Import />}
+        {page === "import" && isOwner && <Import />}
         {page === "receive" && <Receive navigate={navigateFn} />}
         {page === "issue" && <Issue navigate={navigateFn} />}
         {page === "reports" && <Reports />}
+        {page === "document" && docId && <DocumentDetail docId={docId} onBack={nav("items")} />}
       </main>
     </div>
   );
