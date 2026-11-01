@@ -106,7 +106,7 @@ export const stock_movements = sqliteTable("stock_movements", {
   document_id: integer("document_id").notNull().references(() => documents.id),
   line_id: integer("line_id").references(() => document_lines.id),
   item_id: integer("item_id").notNull().references(() => items.id),
-  lot_id: integer("lot_id").references(() => lots.id),
+  lot_id: integer("lot_id").notNull().default(0),
   warehouse_id: integer("warehouse_id").notNull().references(() => warehouses.id),
   movement_date: text("movement_date").notNull(),
   direction: integer("direction").notNull(), // +1 or -1
@@ -121,7 +121,7 @@ export const stock_movements = sqliteTable("stock_movements", {
 // ── stock_balances ────────────────────────────────────────────────────────────
 export const stock_balances = sqliteTable("stock_balances", {
   item_id: integer("item_id").notNull().references(() => items.id),
-  lot_id: integer("lot_id").references(() => lots.id),
+  lot_id: integer("lot_id").notNull().default(0),
   warehouse_id: integer("warehouse_id").notNull().references(() => warehouses.id),
   qty_on_hand_milli: integer("qty_on_hand_milli").notNull().default(0),
   avg_cost_x4: integer("avg_cost_x4").notNull().default(0),

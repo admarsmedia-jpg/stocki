@@ -8,10 +8,10 @@ import {
 } from "../src/domain/documentEngine";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
-function makeSnapshot(entries: Array<{ item_id: number; lot_id: number | null; wh: number; qty: number; avg: number }>): BalanceSnapshot {
+function makeSnapshot(entries: Array<{ item_id: number; lot_id: number; wh: number; qty: number; avg: number }>): BalanceSnapshot {
   const snap: BalanceSnapshot = new Map();
   for (const e of entries) {
-    snap.set(`${e.item_id}:${e.lot_id ?? "null"}:${e.wh}`, { qty: e.qty, avg_cost: e.avg });
+    snap.set(`${e.item_id}:${e.lot_id}:${e.wh}`, { qty: e.qty, avg_cost: e.avg });
   }
   return snap;
 }
@@ -21,13 +21,13 @@ describe("moving average cost", () => {
   it("รับ 10@100 + 10@120 → avg = 110", () => {
     const snap1: BalanceSnapshot = new Map();
     const { lineUpdates: lu1, newBalances: b1 } = computePostDocumentUpdates(
-      { doc_id: 1, warehouse_id: 1, movement_date: "2026-10-31", direction: 1, lines: [{ item_id: 1, lot_id: null, qty_milli: 10_000, unit_cost_x4: 1_000_000 }], user_id: 1 },
+      { doc_id: 1, warehouse_id: 1, movement_date: "2026-10-31", direction: 1, lines: [{ item_id: 1, lot_id: 0, qty_milli: 10_000, unit_cost_x4: 1_000_000 }], user_id: 1 },
       snap1,
     );
     expect(lu1[0].new_avg_cost).toBe(1_000_000); // 100 × 10000
 
     const { lineUpdates: lu2 } = computePostDocumentUpdates(
-      { doc_id: 2, warehouse_id: 1, movement_date: "2026-10-31", direction: 1, lines: [{ item_id: 1, lot_id: null, qty_milli: 10_000, unit_cost_x4: 1_200_000 }], user_id: 1 },
+      { doc_id: 2, warehouse_id: 1, movement_date: "2026-10-31", direction: 1, lines: [{ item_id: 1, lot_id: 0, qty_milli: 10_000, unit_cost_x4: 1_200_000 }], user_id: 1 },
       b1,
     );
     // avg = (10000*1000000 + 10000*1200000) / 20000 = 1100000 = 110 × 10000
@@ -37,7 +37,7 @@ describe("moving average cost", () => {
   it("ยอดหลังรับต้องเพิ่มขึ้น", () => {
     const snap: BalanceSnapshot = new Map();
     const { lineUpdates } = computePostDocumentUpdates(
-      { doc_id: 1, warehouse_id: 1, movement_date: "2026-10-31", direction: 1, lines: [{ item_id: 1, lot_id: null, qty_milli: 5_000, unit_cost_x4: 500_000 }], user_id: 1 },
+      { doc_id: 1, warehouse_id: 1, movement_date: "2026-10-31", direction: 1, lines: [{ item_id: 1, lot_id: 0, qty_milli: 5_000, unit_cost_x4: 500_000 }], user_id: 1 },
       snap,
     );
     expect(lineUpdates[0].new_qty).toBe(5_000);
@@ -47,9 +47,9 @@ describe("moving average cost", () => {
 // ── validateIssueLines ────────────────────────────────────────────────────────
 describe("validateIssueLines", () => {
   it("จ่ายเกินยอดถูกปฏิเสธ", () => {
-    const snap = makeSnapshot([{ item_id: 1, lot_id: null, wh: 1, qty: 5_000, avg: 100_000 }]);
+    const snap = makeSnapshot([{ item_id: 1, lot_id: 0, wh: 1, qty: 5_000, avg: 100_000 }]);
     const result = validateIssueLines(
-      [{ item_id: 1, lot_id: null, qty_milli: 10_000 }],
+      [{ item_id: 1, lot_id: 0, qty_milli: 10_000 }],
       snap, 1, new Date("2026-10-31"),
     );
     expect(result.ok).toBe(false);
@@ -57,18 +57,18 @@ describe("validateIssueLines", () => {
   });
 
   it("จ่ายพอดียอดผ่าน", () => {
-    const snap = makeSnapshot([{ item_id: 1, lot_id: null, wh: 1, qty: 10_000, avg: 100_000 }]);
+    const snap = makeSnapshot([{ item_id: 1, lot_id: 0, wh: 1, qty: 10_000, avg: 100_000 }]);
     const result = validateIssueLines(
-      [{ item_id: 1, lot_id: null, qty_milli: 10_000 }],
+      [{ item_id: 1, lot_id: 0, qty_milli: 10_000 }],
       snap, 1, new Date("2026-10-31"),
     );
     expect(result.ok).toBe(true);
   });
 
   it("ห้ามยอดติดลบ — จ่ายเกินยอดทุกกรณี", () => {
-    const snap = makeSnapshot([{ item_id: 1, lot_id: null, wh: 1, qty: 0, avg: 0 }]);
+    const snap = makeSnapshot([{ item_id: 1, lot_id: 0, wh: 1, qty: 0, avg: 0 }]);
     const result = validateIssueLines(
-      [{ item_id: 1, lot_id: null, qty_milli: 1 }],
+      [{ item_id: 1, lot_id: 0, qty_milli: 1 }],
       snap, 1, new Date("2026-10-31"),
     );
     expect(result.ok).toBe(false);
@@ -148,11 +148,11 @@ describe("concurrent safety via SQL WHERE clause", () => {
   it("ตรวจยอดด้วย SQL WHERE qty >= ? ไม่ใช่ JS — pure domain ห้ามมีการอ่านก่อนเขียน", () => {
     // ตรวจว่า validateIssueLines รับ snapshot (ผลจาก SQL) ไม่ใช่ query ใหม่
     // SQL WHERE qty_on_hand_milli >= ? จะ enforce atomically ใน D1
-    const snap = makeSnapshot([{ item_id: 1, lot_id: null, wh: 1, qty: 20_000, avg: 100_000 }]);
+    const snap = makeSnapshot([{ item_id: 1, lot_id: 0, wh: 1, qty: 20_000, avg: 100_000 }]);
     // 20 คำขอพร้อมกัน แต่ละอัน qty 1000 รวม 20000 — อันสุดท้ายต้องไม่ผ่านถ้า SQL ทำงานถูก
     // ทดสอบ pure: ยอดหลังจ่ายห้ามติดลบ
     const { lineUpdates } = computePostDocumentUpdates(
-      { doc_id: 1, warehouse_id: 1, movement_date: "2026-10-31", direction: -1, lines: [{ item_id: 1, lot_id: null, qty_milli: 20_000, unit_cost_x4: 100_000 }], user_id: 1 },
+      { doc_id: 1, warehouse_id: 1, movement_date: "2026-10-31", direction: -1, lines: [{ item_id: 1, lot_id: 0, qty_milli: 20_000, unit_cost_x4: 100_000 }], user_id: 1 },
       snap,
     );
     expect(lineUpdates[0].new_qty).toBe(0); // พอดี ไม่ติดลบ

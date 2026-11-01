@@ -12,7 +12,7 @@ const docApp = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const lineSchema = z.object({
   item_id: z.number().int().positive(),
-  lot_id: z.number().int().positive().nullable().default(null),
+  lot_id: z.number().int().min(0).default(0),
   qty_milli: z.number().int().positive(),
   unit_cost_x4: z.number().int().min(0).default(0),
 });
@@ -67,11 +67,12 @@ async function loadBalanceSnapshot(
 ): Promise<BalanceSnapshot> {
   const snap: BalanceSnapshot = new Map();
   for (const line of lines) {
+    const lotId = line.lot_id ?? 0;
     const row = await db.prepare(
       `SELECT qty_on_hand_milli, avg_cost_x4 FROM stock_balances
-       WHERE item_id=? AND lot_id IS ? AND warehouse_id=?`,
-    ).bind(line.item_id, line.lot_id, warehouse_id).first() as { qty_on_hand_milli: number; avg_cost_x4: number } | null;
-    const key = `${line.item_id}:${line.lot_id ?? "null"}:${warehouse_id}`;
+       WHERE item_id=? AND lot_id=? AND warehouse_id=?`,
+    ).bind(line.item_id, lotId, warehouse_id).first() as { qty_on_hand_milli: number; avg_cost_x4: number } | null;
+    const key = `${line.item_id}:${lotId}:${warehouse_id}`;
     snap.set(key, { qty: row?.qty_on_hand_milli ?? 0, avg_cost: row?.avg_cost_x4 ?? 0 });
   }
   return snap;
@@ -102,9 +103,9 @@ docApp.post("/api/documents/receive", async (c) => {
   const nowIso = new Date().toISOString();
 
   // resolve lot_id สำหรับแต่ละ line ที่มีข้อมูลล็อต (upsert ก่อน batch)
-  const resolvedLines: Array<{ item_id: number; lot_id: number | null; qty_milli: number; unit_cost_x4: number }> = [];
+  const resolvedLines: Array<{ item_id: number; lot_id: number; qty_milli: number; unit_cost_x4: number }> = [];
   for (const line of lines) {
-    let lot_id: number | null = null;
+    let lot_id = 0; // sentinel 0 = ไม่มีล็อต
     if (line.lot_no) {
       await c.env.DB.prepare(
         `INSERT INTO lots (item_id, lot_no, mfg_date, expiry_date, po_no, manufacturer_name, created_at)
@@ -137,7 +138,7 @@ docApp.post("/api/documents/receive", async (c) => {
   const stmts = lineUpdates.flatMap((lu) => [
     c.env.DB.prepare(
       `INSERT INTO document_lines (document_id, item_id, lot_id, qty_milli, unit_cost_x4) VALUES (?,?,?,?,?)`,
-    ).bind(doc_id, lu.item_id, lu.lot_id, lu.qty_milli, lu.unit_cost_x4),
+    ).bind(doc_id, lu.item_id, lu.lot_id || null, lu.qty_milli, lu.unit_cost_x4),
 
     c.env.DB.prepare(
       `INSERT INTO stock_movements (document_id, item_id, lot_id, warehouse_id, movement_date, direction, qty_milli, unit_cost_x4, balance_qty_after_milli, avg_cost_after_x4)
@@ -183,8 +184,11 @@ docApp.post("/api/documents/issue", async (c) => {
   ).bind(idempotency_key).first() as { id: number; status: string } | null;
   if (existing) return c.json(buildIdempotencyResponse(existing));
 
+  // normalize lot_id: ใช้ sentinel 0 แทน null
+  const linesNorm = lines.map(l => ({ ...l, lot_id: l.lot_id ?? 0 }));
+
   // โหลด lot info สำหรับตรวจวันหมดอายุ
-  const lotIds = lines.map(l => l.lot_id).filter((id): id is number => id !== null);
+  const lotIds = linesNorm.map(l => l.lot_id).filter(id => id > 0);
   let lotInfos: LotInfo[] = [];
   if (lotIds.length > 0) {
     const placeholders = lotIds.map(() => "?").join(",");
@@ -195,12 +199,19 @@ docApp.post("/api/documents/issue", async (c) => {
   }
 
   // โหลด snapshot และ validate
-  const snap = await loadBalanceSnapshot(c.env.DB, warehouse_id, lines);
+  const snap = await loadBalanceSnapshot(c.env.DB, warehouse_id, linesNorm);
   const today = new Date(doc_date);
-  const validation = validateIssueLines(lines, snap, warehouse_id, today, lotInfos);
+  const validation = validateIssueLines(linesNorm, snap, warehouse_id, today, lotInfos);
   if (!validation.ok) {
     return c.json({ error: "validation_failed", errors: validation.errors }, 422);
   }
+
+  // เติม unit_cost จาก avg_cost ใน snapshot (frontend ส่ง 0 เสมอ)
+  const linesWithCost = linesNorm.map(l => {
+    const key = `${l.item_id}:${l.lot_id}:${warehouse_id}`;
+    const bal = snap.get(key);
+    return { ...l, unit_cost_x4: bal?.avg_cost ?? 0 };
+  });
 
   const yymm = doc_date.slice(2, 4) + doc_date.slice(5, 7);
   const doc_no = await nextDocNo(c.env.DB, "ISSUE", yymm);
@@ -214,7 +225,7 @@ docApp.post("/api/documents/issue", async (c) => {
   const doc_id = docResult.meta.last_row_id;
 
   const { lineUpdates } = computePostDocumentUpdates(
-    { doc_id, warehouse_id, movement_date: doc_date, direction: -1, lines, user_id: session.userId },
+    { doc_id, warehouse_id, movement_date: doc_date, direction: -1, lines: linesWithCost, user_id: session.userId },
     snap,
   );
 
@@ -222,7 +233,7 @@ docApp.post("/api/documents/issue", async (c) => {
   const stmts = lineUpdates.flatMap((lu) => [
     c.env.DB.prepare(
       `INSERT INTO document_lines (document_id, item_id, lot_id, qty_milli, unit_cost_x4) VALUES (?,?,?,?,?)`,
-    ).bind(doc_id, lu.item_id, lu.lot_id, lu.qty_milli, lu.unit_cost_x4),
+    ).bind(doc_id, lu.item_id, lu.lot_id || null, lu.qty_milli, lu.unit_cost_x4),
 
     c.env.DB.prepare(
       `INSERT INTO stock_movements (document_id, item_id, lot_id, warehouse_id, movement_date, direction, qty_milli, unit_cost_x4, balance_qty_after_milli, avg_cost_after_x4)
@@ -232,7 +243,7 @@ docApp.post("/api/documents/issue", async (c) => {
     // WHERE qty >= qty_milli ป้องกัน race condition
     c.env.DB.prepare(
       `UPDATE stock_balances SET qty_on_hand_milli=qty_on_hand_milli-?, updated_at=?
-       WHERE item_id=? AND lot_id IS ? AND warehouse_id=? AND qty_on_hand_milli>=?`,
+       WHERE item_id=? AND lot_id=? AND warehouse_id=? AND qty_on_hand_milli>=?`,
     ).bind(lu.qty_milli, nowIso, lu.item_id, lu.lot_id, warehouse_id, lu.qty_milli),
   ]);
 
@@ -346,7 +357,8 @@ docApp.post("/api/documents/:id/cancel", async (c) => {
     "SELECT item_id, lot_id, qty_milli, unit_cost_x4 FROM document_lines WHERE document_id=?",
   ).bind(id).all();
 
-  const lines = origLines.results as Array<{ item_id: number; lot_id: number | null; qty_milli: number; unit_cost_x4: number }>;
+  const linesRaw = origLines.results as Array<{ item_id: number; lot_id: number | null; qty_milli: number; unit_cost_x4: number }>;
+  const lines = linesRaw.map(l => ({ ...l, lot_id: l.lot_id ?? 0 }));
 
   // direction กลับรายการ
   const reverseDir = (doc.doc_type === "RECEIVE" ? -1 : 1) as 1 | -1;
@@ -360,7 +372,7 @@ docApp.post("/api/documents/:id/cancel", async (c) => {
   const stmts = lineUpdates.flatMap((lu) => [
     c.env.DB.prepare(
       `INSERT INTO document_lines (document_id, item_id, lot_id, qty_milli, unit_cost_x4) VALUES (?,?,?,?,?)`,
-    ).bind(cancel_id, lu.item_id, lu.lot_id, lu.qty_milli, lu.unit_cost_x4),
+    ).bind(cancel_id, lu.item_id, lu.lot_id || null, lu.qty_milli, lu.unit_cost_x4),
 
     c.env.DB.prepare(
       `INSERT INTO stock_movements (document_id, item_id, lot_id, warehouse_id, movement_date, direction, qty_milli, unit_cost_x4, balance_qty_after_milli, avg_cost_after_x4)

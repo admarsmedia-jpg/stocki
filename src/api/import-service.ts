@@ -154,7 +154,7 @@ importApp.post("/api/import/opening", async (c) => {
     const wKey = `${idempotency_key}:${wCode}`;
 
     // upsert items และ lots ก่อน แล้วค่อย postDocument
-    const lineInputs: Array<{ item_id: number; lot_id: number | null; qty_milli: number; unit_cost_x4: number }> = [];
+    const lineInputs: Array<{ item_id: number; lot_id: number; qty_milli: number; unit_cost_x4: number }> = [];
 
     for (const row of wRows) {
       // upsert unit
@@ -208,13 +208,14 @@ importApp.post("/api/import/opening", async (c) => {
         lot_id = lotRow.id;
       }
 
-      // ตรวจว่ายอดยกมามีแล้วหรือยัง — ถ้ามีแล้วถือเป็น error ของแถวนั้น
+      const lotIdSentinel = lot_id ?? 0;
+
+      // ตรวจว่ามียอดสต็อกอยู่แล้ว (ทุก doc_type) — ถ้ามีแล้วข้ามแถวนี้ ไม่เขียนทับ
       const existingBalance = await c.env.DB.prepare(
         `SELECT 1 FROM stock_movements sm
-         JOIN documents d ON d.id=sm.document_id
-         WHERE d.doc_type='OPENING' AND sm.item_id=? AND sm.lot_id IS ? AND sm.warehouse_id=?
+         WHERE sm.item_id=? AND sm.lot_id=? AND sm.warehouse_id=?
          LIMIT 1`,
-      ).bind(item_id, lot_id, warehouse_id).first();
+      ).bind(item_id, lotIdSentinel, warehouse_id).first();
 
       if (existingBalance) {
         // ข้ามแถวที่มียอดยกมาแล้ว (ไม่สร้างซ้ำ)
@@ -223,7 +224,7 @@ importApp.post("/api/import/opening", async (c) => {
 
       lineInputs.push({
         item_id,
-        lot_id,
+        lot_id: lot_id ?? 0,
         qty_milli: Math.round(row.qty * 1000),
         unit_cost_x4: Math.round(row.unit_cost * 10000),
       });
@@ -259,7 +260,7 @@ importApp.post("/api/import/opening", async (c) => {
       const lineStmt = c.env.DB.prepare(
         `INSERT INTO document_lines (document_id, item_id, lot_id, qty_milli, unit_cost_x4)
          VALUES (?,?,?,?,?)`,
-      ).bind(doc_id, lu.item_id, lu.lot_id, lu.qty_milli, lu.unit_cost_x4);
+      ).bind(doc_id, lu.item_id, lu.lot_id || null, lu.qty_milli, lu.unit_cost_x4);
 
       const movStmt = c.env.DB.prepare(
         `INSERT INTO stock_movements (document_id, item_id, lot_id, warehouse_id, movement_date, direction, qty_milli, unit_cost_x4, balance_qty_after_milli, avg_cost_after_x4)

@@ -5,7 +5,7 @@
 
 export type IssueLine = {
   item_id: number;
-  lot_id: number | null;
+  lot_id: number;  // 0 = ไม่มีล็อต (sentinel)
   qty_milli: number;
 };
 
@@ -45,14 +45,14 @@ export function validateIssueLines(
   const lotMap = new Map(lotInfos.map(l => [l.id, l]));
 
   for (const line of lines) {
-    const key = `${line.item_id}:${line.lot_id ?? "null"}:${warehouse_id}`;
+    const key = `${line.item_id}:${line.lot_id}:${warehouse_id}`;
     const bal = snapshot.get(key) ?? { qty: 0, avg_cost: 0 };
 
     if (bal.qty < line.qty_milli) {
       errors.push(`item_id=${line.item_id} lot_id=${line.lot_id}: ยอดไม่เพียงพอ (มี ${bal.qty} ต้องการ ${line.qty_milli})`);
     }
 
-    if (line.lot_id !== null) {
+    if (line.lot_id > 0) {
       const lot = lotMap.get(line.lot_id);
       if (lot && isExpired(lot.expiry_date, today)) {
         errors.push(`item_id=${line.item_id} lot_id=${line.lot_id}: ล็อตหมดอายุแล้ว (${lot.expiry_date})`);

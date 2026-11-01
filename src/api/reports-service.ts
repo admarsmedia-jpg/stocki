@@ -76,7 +76,7 @@ reportsApp.get("/movements/export", async (c) => {
            SUM(sm.qty_milli*sm.unit_cost_x4/1000) as value_x4,
            w.name as warehouse
     FROM stock_movements sm
-    JOIN document_lines dl ON dl.id=sm.line_id
+    LEFT JOIN document_lines dl ON dl.id=sm.line_id
     JOIN documents d ON d.id=sm.document_id
     JOIN items i ON i.id=sm.item_id
     JOIN warehouses w ON w.id=sm.warehouse_id
@@ -111,7 +111,7 @@ reportsApp.get("/movements", async (c) => {
            ${role === "OWNER" ? "SUM(sm.qty_milli*sm.unit_cost_x4/1000) as value_x4," : ""}
            w.name as warehouse
     FROM stock_movements sm
-    JOIN document_lines dl ON dl.id=sm.line_id
+    LEFT JOIN document_lines dl ON dl.id=sm.line_id
     JOIN documents d ON d.id=sm.document_id
     JOIN items i ON i.id=sm.item_id
     JOIN warehouses w ON w.id=sm.warehouse_id

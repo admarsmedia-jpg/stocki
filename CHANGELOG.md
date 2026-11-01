@@ -4,6 +4,20 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-bugfix3] - 2026-11-01
+
+### Fixed
+- **stock_balances / stock_movements**: เปลี่ยน `lot_id NULL` → sentinel `0` (migration 0003)
+  แก้ปัญหา SQLite ที่ไม่ enforce uniqueness บน composite PRIMARY KEY ที่มี NULL component
+  ทำให้ `ON CONFLICT` ทำงานถูกต้องสำหรับสินค้าที่ไม่ใช้ล็อต (bugs 1+2)
+- **import-service**: เช็ค `existingBalance` บนทุก movement (ไม่ใช่แค่ OPENING)
+  ป้องกันยอดยกมาทับยอดที่มี RECEIVE อยู่แล้ว (bug 3)
+- **documents-service (ISSUE)**: ดึง `unit_cost_x4` จาก `avg_cost` ใน snapshot
+  แทนที่จะใช้ 0 ที่ frontend ส่งมา — ใบตัดออกแสดงต้นทุนถูกต้อง (bug 4)
+- **reports-service (movements)**: เปลี่ยน INNER JOIN เป็น LEFT JOIN บน `document_lines`
+  แสดงรายการรับ-จ่ายครบถ้วนแม้ movement จะไม่มี line_id (bug 5)
+- อัปเดต type `PostLine.lot_id` เป็น `number` (ไม่ใช่ `number | null`)
+
 ## [0.1.0-bugfix2] - 2026-11-01
 
 ### Fixed

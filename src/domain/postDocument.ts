@@ -5,7 +5,7 @@
 
 export type PostLine = {
   item_id: number;
-  lot_id: number | null;
+  lot_id: number;        // 0 = ไม่มีล็อต (sentinel)
   qty_milli: number;     // จำนวนสัมบูรณ์ (ไม่รวม direction)
   unit_cost_x4: number;
 };
@@ -31,7 +31,7 @@ export function computePostDocumentUpdates(
 ): {
   lineUpdates: Array<{
     item_id: number;
-    lot_id: number | null;
+    lot_id: number;
     warehouse_id: number;
     qty_milli: number;
     unit_cost_x4: number;
@@ -45,7 +45,7 @@ export function computePostDocumentUpdates(
   const lineUpdates = [];
 
   for (const line of input.lines) {
-    const key = `${line.item_id}:${line.lot_id ?? "null"}:${input.warehouse_id}`;
+    const key = `${line.item_id}:${line.lot_id ?? 0}:${input.warehouse_id}`;
     const cur = newBalances.get(key) ?? { qty: 0, avg_cost: 0 };
 
     const newQty = cur.qty + input.direction * line.qty_milli;
@@ -60,7 +60,7 @@ export function computePostDocumentUpdates(
 
     lineUpdates.push({
       item_id: line.item_id,
-      lot_id: line.lot_id,
+      lot_id: line.lot_id,   // 0 = no lot
       warehouse_id: input.warehouse_id,
       qty_milli: line.qty_milli,
       unit_cost_x4: line.unit_cost_x4,
