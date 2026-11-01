@@ -37,7 +37,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="bg-white rounded-lg shadow p-8 w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-center mb-6 text-gray-800">Stocki</h1>
+        <h1 className="text-2xl font-bold text-center mb-6 " style={{color:"#FF6200"}}>Stocki!</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">อีเมล</label>
@@ -63,7 +63,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white rounded py-2 font-medium hover:bg-blue-700 disabled:opacity-50"
+            className="w-full " style={{backgroundColor:"#FF6200"}} text-white rounded py-2 font-medium hover:bg-blue-700 disabled:opacity-50"
           >
             {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
           </button>
