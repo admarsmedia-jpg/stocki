@@ -4,6 +4,14 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-test1] - 2026-11-02
+
+### Added
+- **scripts/seed_remote.sh**: Seed script idempotent (key `seed-v1-*`) — สร้างสินค้า 20 รายการ (น้ำมันเครื่อง, ไส้กรอง, หัวเทียน, แบตเตอรี่, ยาง, เบรก, ยา/เวชภัณฑ์ใช้ล็อต) พร้อม RECEIVE 7 ใบ และ ISSUE 5 ใบ
+- **playwright.config.ts**: Playwright config กำหนด baseURL, Chromium ที่ `/opt/pw-browsers/chromium`, testDir `e2e/`
+- **e2e/stocki.spec.ts**: E2E tests ครอบคลุม: Auth (login/logout/wrong-pass), Items (ค้นบาร์โค้ด), Import (ปุ่มดาวน์โหลดแม่แบบ), Receive (barcode scan+Enter), Issue, Reports (OWNER เห็นมูลค่า), Access Control (STAFF ไม่เห็นมูลค่า)
+- **tests/edge-cases.test.ts**: 25 unit tests ครอบคลุม: postDocument (ยอด=0, avg cost ไม่เปลี่ยนตอน issue), moving average (2 batch), validateIssueLines (multi-line partial fail, lot หมดอายุ), isExpired (strict <), idempotency response, validateImportRows (expiry=mfg, whitespace lot_no, ขาดข้อมูล, qty=0, qty<0, cost<0, หน่วยไม่รู้จัก, ล็อตซ้ำ), parseThaiDate (พ.ศ., ค.ศ., Excel serial, null)
+
 ## [0.1.0-bugfix8] - 2026-11-02
 
 ### Fixed
