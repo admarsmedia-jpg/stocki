@@ -38,9 +38,18 @@ trap cleanup EXIT
 # ────────────────────────────────────────────────────────────────
 # JSON helper ใช้ node (มีอยู่แล้วเพราะใช้ npm) — ไม่ต้องการ python3
 # _jn "JS expr using d" "$json" [default]
+# - JSON (อาจมีภาษาไทย/ขนาดใหญ่) → stdin เพื่อหลีกเลี่ยงปัญหา process.argv บน Windows
+# - expression → process.argv[1] (ASCII, สั้น)
+# - eval() คืนค่า expression สุดท้าย รองรับทั้ง single และ multi-statement
 _jn() {
   local expr="$1" json="$2" def="${3:-}"
-  node -e "try{const d=JSON.parse(process.argv[1]);const r=($expr);process.stdout.write(String(r==null||r===undefined?'${def}':r));}catch(e){process.stdout.write('${def}');}" -- "$json" 2>/dev/null || echo "${def}"
+  local result
+  result=$(printf '%s' "$json" | node -e "
+const s=require('fs').readFileSync(0,'utf8');
+try{const d=JSON.parse(s);const r=eval(process.argv[1]);if(r!=null&&r!==undefined)process.stdout.write(String(r));}
+catch(e){}
+" -- "$expr" 2>/dev/null)
+  echo "${result:-$def}"
 }
 
 # Write JSON payload to temp file (รองรับ UTF-8 ภาษาไทยบน Windows Git Bash)
@@ -252,11 +261,7 @@ if [[ "$MED001_ID" != "0" ]]; then
   echo "  MED001 lots available=$LOT_COUNT"
   [[ "$LOT_COUNT" -ge 2 ]] 2>/dev/null && ok "มี MED001 lots >= 2" || fail "MED001 lots น้อยเกิน: $LOT_COUNT"
 
-  FEFO_OK=$(_jn "
-    const lots=d.lots||[];
-    if(lots.length<2)'skip';
-    else lots[0].expiry_date<=lots[1].expiry_date?'ok':'fail:'+lots[0].expiry_date+'>'+lots[1].expiry_date
-  " "$LOTS_SUGG" "fail")
+  FEFO_OK=$(_jn "const lots=d.lots||[];if(lots.length<2)'skip';else(lots[0].expiry_date<=lots[1].expiry_date?'ok':'fail:'+lots[0].expiry_date+'>'+lots[1].expiry_date)" "$LOTS_SUGG" "fail")
   [[ "$FEFO_OK" == "ok" ]] && ok "FEFO ล็อตหมดก่อนขึ้นหน้า" || [[ "$FEFO_OK" == "skip" ]] && skip "ล็อตน้อยกว่า 2" || fail "FEFO ผิด: $FEFO_OK"
 
   TODAY=$(date +%Y-%m-%d)
@@ -363,16 +368,7 @@ LOTS_ROWS=$(_jn "d.data?d.data.length:0" "$LOTS_R" "0")
 echo "  lots rows=$LOTS_ROWS"
 [[ "$LOTS_ROWS" -ge 3 ]] 2>/dev/null && ok "lots report >= 3 rows" || fail "lots rows น้อย: $LOTS_ROWS"
 
-LOTS5_FIELDS=$(_jn "
-  const rows=d.data||[];
-  if(!rows.length)'skip';
-  else{
-    const r=rows[0];
-    const req=['lot_no','mfg_date','expiry_date','po_no','manufacturer_name'];
-    const miss=req.filter(f=>!(f in r));
-    miss.length?'fail:'+miss.join(','):'ok'
-  }
-" "$LOTS_R" "fail:parse_error")
+LOTS5_FIELDS=$(_jn "const rows=d.data||[];if(!rows.length)'skip';else{const r=rows[0];const req=['lot_no','mfg_date','expiry_date','po_no','manufacturer_name'];const miss=req.filter(f=>!(f in r));miss.length?'fail:'+miss.join(','):'ok'}" "$LOTS_R" "fail:parse_error")
 if [[ "$LOTS5_FIELDS" == "ok" ]]; then
   ok "lots report ครบ 5 ช่อง (lot_no, mfg_date, expiry_date, po_no, manufacturer_name)"
 elif [[ "$LOTS5_FIELDS" == "skip" ]]; then
