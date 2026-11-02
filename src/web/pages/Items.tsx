@@ -33,6 +33,16 @@ export default function Items() {
     setLoading(false);
   }
 
+  async function toggleStatus(item: Item) {
+    const newStatus = item.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+    await fetch(`/api/items/${item.id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    load(q);
+  }
+
   useEffect(() => {
     load();
     fetch("/api/units").then(r => r.json()).then(d => setUnits(d.units ?? [])).catch(() => {});
@@ -100,9 +110,12 @@ export default function Items() {
                 {items.map((item) => {
                   const unit = units.find(u => u.id === item.unit_id);
                   return (
-                    <tr key={item.id} className="hover:bg-orange-50/40 transition-colors">
+                    <tr key={item.id} className={`hover:bg-orange-50/40 transition-colors ${item.status === "INACTIVE" ? "opacity-50" : ""}`}>
                       <td className="px-4 py-3 font-mono text-xs text-gray-500">{item.sku}</td>
-                      <td className="px-4 py-3 font-medium text-gray-800">{item.name_th}</td>
+                      <td className="px-4 py-3 font-medium text-gray-800">
+                        {item.name_th}
+                        {item.status === "INACTIVE" && <span className="ml-2 text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">ปิดใช้งาน</span>}
+                      </td>
                       <td className="px-4 py-3 font-mono text-xs text-gray-400">{item.barcode ?? "—"}</td>
                       <td className="px-4 py-3 text-center text-gray-600">{unit ? unit.name_th : "—"}</td>
                       <td className="px-4 py-3 text-center">
@@ -117,10 +130,20 @@ export default function Items() {
                       )}
                       {user?.role === "OWNER" && (
                         <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => { setEditItem(item); setShowForm(true); }}
-                            className="text-xs font-medium px-3 py-1 rounded-lg border border-gray-200 text-gray-600 hover:border-orange-300 hover:text-orange-600 transition-colors"
-                          >แก้ไข</button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => { setEditItem(item); setShowForm(true); }}
+                              className="text-xs font-medium px-3 py-1 rounded-lg border border-gray-200 text-gray-600 hover:border-orange-300 hover:text-orange-600 transition-colors"
+                            >แก้ไข</button>
+                            <button
+                              onClick={() => toggleStatus(item)}
+                              className={`text-xs font-medium px-3 py-1 rounded-lg border transition-colors ${
+                                item.status === "ACTIVE"
+                                  ? "border-red-200 text-red-600 hover:bg-red-50"
+                                  : "border-green-200 text-green-600 hover:bg-green-50"
+                              }`}
+                            >{item.status === "ACTIVE" ? "ปิดใช้งาน" : "เปิดใช้งาน"}</button>
+                          </div>
                         </td>
                       )}
                     </tr>

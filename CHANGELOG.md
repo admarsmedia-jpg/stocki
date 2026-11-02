@@ -4,6 +4,15 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-bugfix10] - 2026-11-02
+
+### Fixed
+- **Bug 5 — บาร์โค้ดซ้ำได้**: เพิ่มตรวจ duplicate barcode ใน POST/PUT `/api/items` ก่อนบันทึก (ตอบ 409 พร้อม `barcode_duplicate`); เพิ่ม migration `0005_barcode_unique.sql` สร้าง partial unique index `WHERE barcode IS NOT NULL`; อัปเดต Drizzle schema ใช้ `uniqueIndex`
+- **Bug 6 — วันที่ล่วงหน้าเกิน**: RECEIVE/ISSUE ปฏิเสธ `doc_date` ที่เกินวันพรุ่งนี้ (ตอบ 422 `invalid_date`) — buffer 1 วันสำหรับ timezone
+- **Bug 7a — ปิด/เปิดสินค้า**: เพิ่ม `PATCH /api/items/:id/status` (OWNER เท่านั้น) บันทึก audit_log ทุกครั้ง
+- **Bug 7b — ปุ่มในหน้าสินค้า**: Items.tsx แสดงปุ่ม "ปิดใช้งาน"/"เปิดใช้งาน" ต่อท้ายปุ่มแก้ไข; สินค้า INACTIVE แสดงแบบจางพร้อม badge; OWNER เห็นสินค้าทุกสถานะ STAFF เห็นเฉพาะ ACTIVE
+- **Bug 7c — รีเซ็ตข้อมูลทดสอบ**: เพิ่ม `POST /api/admin/reset-data` (OWNER, ต้องส่ง `confirm:"RESET"`) ล้างข้อมูล transaction ทั้งหมดยกเว้น users/sessions
+
 ## [0.1.0-bugfix9] - 2026-11-02
 
 ### Fixed

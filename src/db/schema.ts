@@ -46,7 +46,7 @@ export const items = sqliteTable("items", {
   standard_cost_x4: integer("standard_cost_x4").notNull().default(0),
   status: text("status", { enum: ["ACTIVE", "INACTIVE"] }).notNull().default("ACTIVE"),
 }, (t) => ({
-  idx_barcode: index("items_barcode_idx").on(t.barcode),
+  idx_barcode: uniqueIndex("items_barcode_unique_idx").on(t.barcode),
   idx_sku: index("items_sku_idx").on(t.sku),
 }));
 

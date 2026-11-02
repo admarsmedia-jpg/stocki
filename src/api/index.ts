@@ -273,17 +273,19 @@ app.get("/api/items", async (c) => {
   if (!session) return c.json({ error: "unauthorized" }, 401);
 
   const q = (c.req.query("q") ?? c.req.query("search") ?? "").trim();
+  // OWNER เห็นสินค้าทุกสถานะ STAFF เห็นเฉพาะ ACTIVE
+  const statusFilter = session.role === "OWNER" ? "" : "AND status='ACTIVE'";
   let rows: any[];
   if (q && /^\d{8,}$/.test(q)) {
     rows = await c.env.DB.prepare(
-      "SELECT * FROM items WHERE (barcode=? OR sku=?) AND status='ACTIVE'"
+      `SELECT * FROM items WHERE (barcode=? OR sku=?) ${statusFilter}`
     ).bind(q, q).all().then(r => r.results);
   } else if (q) {
     rows = await c.env.DB.prepare(
-      "SELECT * FROM items WHERE (name_th LIKE ? OR sku LIKE ? OR barcode LIKE ?) AND status='ACTIVE'"
+      `SELECT * FROM items WHERE (name_th LIKE ? OR sku LIKE ? OR barcode LIKE ?) ${statusFilter}`
     ).bind(`%${q}%`, `%${q}%`, `%${q}%`).all().then(r => r.results);
   } else {
-    rows = await c.env.DB.prepare("SELECT * FROM items WHERE status='ACTIVE'").all().then(r => r.results);
+    rows = await c.env.DB.prepare(`SELECT * FROM items WHERE 1=1 ${statusFilter}`).all().then(r => r.results);
   }
 
   return c.json({ items: rows.map((item) => applyRoleFilter(item, session.role)) });
@@ -302,6 +304,12 @@ app.post("/api/items", async (c) => {
 
   const unitRow = await c.env.DB.prepare("SELECT id FROM units WHERE id=?").bind(d.unit_id).first();
   if (!unitRow) return c.json({ error: "หน่วยนับไม่ถูกต้อง" }, 400);
+
+  // Bug 5: ตรวจบาร์โค้ดซ้ำก่อนบันทึก
+  if (d.barcode) {
+    const dup = await c.env.DB.prepare("SELECT id FROM items WHERE barcode=?").bind(d.barcode).first();
+    if (dup) return c.json({ error: "barcode_duplicate", message: "บาร์โค้ดนี้มีสินค้าอื่นใช้อยู่แล้ว" }, 409);
+  }
 
   let result: Awaited<ReturnType<D1PreparedStatement["run"]>>;
   try {
@@ -338,6 +346,12 @@ app.put("/api/items/:id", async (c) => {
   const parsed = itemSchema.partial().safeParse(body);
   if (!parsed.success) return c.json({ error: "invalid_input", issues: parsed.error.issues }, 400);
 
+  // Bug 5: ตรวจบาร์โค้ดซ้ำกับสินค้าอื่น
+  if (parsed.data.barcode) {
+    const dup = await c.env.DB.prepare("SELECT id FROM items WHERE barcode=? AND id<>?").bind(parsed.data.barcode, id).first();
+    if (dup) return c.json({ error: "barcode_duplicate", message: "บาร์โค้ดนี้มีสินค้าอื่นใช้อยู่แล้ว" }, 409);
+  }
+
   const merged = { ...old, ...parsed.data } as any;
   await c.env.DB.prepare(
     `UPDATE items SET sku=?, name_th=?, barcode=?, category_id=?, unit_id=?, track_lot=?, reorder_point_milli=?, standard_cost_x4=? WHERE id=?`,
@@ -348,6 +362,58 @@ app.put("/api/items/:id", async (c) => {
   ).bind(String(id), JSON.stringify(old), JSON.stringify(merged), session.userId, new Date().toISOString()).run();
 
   return c.json({ ok: true });
+});
+
+// ── PATCH /api/items/:id/status — ปิด/เปิดใช้งานสินค้า ──────────────────────
+app.patch("/api/items/:id/status", async (c) => {
+  const session = c.get("session");
+  if (!session) return c.json({ error: "unauthorized" }, 401);
+  if (session.role !== "OWNER") return c.json({ error: "forbidden" }, 403);
+
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = z.object({ status: z.enum(["ACTIVE", "INACTIVE"]) }).safeParse(body);
+  if (!parsed.success) return c.json({ error: "invalid_input" }, 400);
+
+  const old = await c.env.DB.prepare("SELECT * FROM items WHERE id=?").bind(id).first();
+  if (!old) return c.json({ error: "not_found" }, 404);
+
+  await c.env.DB.prepare("UPDATE items SET status=? WHERE id=?").bind(parsed.data.status, id).run();
+  await c.env.DB.prepare(
+    "INSERT INTO audit_logs (table_name, record_id, action, old_json, new_json, user_id, at) VALUES ('items',?,'UPDATE',?,?,?,?)",
+  ).bind(String(id), JSON.stringify(old), JSON.stringify({ ...old, status: parsed.data.status }), session.userId, new Date().toISOString()).run();
+
+  return c.json({ ok: true });
+});
+
+// ── POST /api/admin/reset-data — ล้างข้อมูลทดสอบ (OWNER เท่านั้น) ──────────
+app.post("/api/admin/reset-data", async (c) => {
+  const session = c.get("session");
+  if (!session) return c.json({ error: "unauthorized" }, 401);
+  if (session.role !== "OWNER") return c.json({ error: "forbidden" }, 403);
+
+  const body = await c.req.json().catch(() => ({}));
+  if (!z.object({ confirm: z.literal("RESET") }).safeParse(body).success) {
+    return c.json({ error: "ต้องส่ง confirm: 'RESET' เพื่อยืนยัน" }, 400);
+  }
+
+  await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM stock_movements"),
+    c.env.DB.prepare("DELETE FROM stock_balances"),
+    c.env.DB.prepare("DELETE FROM document_lines"),
+    c.env.DB.prepare("DELETE FROM documents"),
+    c.env.DB.prepare("DELETE FROM lots"),
+    c.env.DB.prepare("DELETE FROM items"),
+    c.env.DB.prepare("DELETE FROM categories"),
+    c.env.DB.prepare("DELETE FROM units"),
+    c.env.DB.prepare("DELETE FROM warehouses"),
+    c.env.DB.prepare("DELETE FROM doc_sequences"),
+    c.env.DB.prepare(
+      "INSERT INTO audit_logs (table_name, record_id, action, old_json, new_json, user_id, at) VALUES ('system','0','RESET_DATA','{}','{}',?,?)",
+    ).bind(session.userId, new Date().toISOString()),
+  ]);
+
+  return c.json({ ok: true, message: "ล้างข้อมูลทั้งหมดเรียบร้อย (ยกเว้น users และ sessions)" });
 });
 
 // ── reset password (ยืนยันด้วย APP_SECRET) ───────────────────────────────────

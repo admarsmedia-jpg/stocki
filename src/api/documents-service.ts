@@ -91,6 +91,14 @@ docApp.post("/api/documents/receive", async (c) => {
 
   const { idempotency_key, warehouse_id, doc_date, ref_text, note, lines } = parsed.data;
 
+  // Bug 6: ห้ามลงวันที่เกินวันพรุ่งนี้ (buffer 1 วันสำหรับ timezone)
+  const maxDate = new Date();
+  maxDate.setDate(maxDate.getDate() + 1);
+  maxDate.setHours(23, 59, 59, 999);
+  if (new Date(doc_date + "T00:00:00Z") > maxDate) {
+    return c.json({ error: "invalid_date", message: "วันที่เอกสารต้องไม่เกินวันพรุ่งนี้" }, 422);
+  }
+
   // idempotency check — เฉพาะ POSTED เท่านั้น (DRAFT คือล้มเหลวกลางทาง)
   const existing = await c.env.DB.prepare(
     "SELECT id, status FROM documents WHERE idempotency_key=? AND doc_type='RECEIVE' AND status='POSTED'",
@@ -186,6 +194,14 @@ docApp.post("/api/documents/issue", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid_input", issues: parsed.error.issues }, 400);
 
   const { idempotency_key, warehouse_id, doc_date, ref_text, note, lines } = parsed.data;
+
+  // Bug 6: ห้ามลงวันที่เกินวันพรุ่งนี้
+  const maxDateIssue = new Date();
+  maxDateIssue.setDate(maxDateIssue.getDate() + 1);
+  maxDateIssue.setHours(23, 59, 59, 999);
+  if (new Date(doc_date + "T00:00:00Z") > maxDateIssue) {
+    return c.json({ error: "invalid_date", message: "วันที่เอกสารต้องไม่เกินวันพรุ่งนี้" }, 422);
+  }
 
   // idempotency check — เฉพาะ POSTED เท่านั้น
   const existing = await c.env.DB.prepare(
