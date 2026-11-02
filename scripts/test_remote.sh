@@ -48,9 +48,11 @@ echo "  setup: ${SETUP:0:80}"
 
 # ────────────────────────────────────────────────────────────────
 c "2 · Login OWNER"
+_EMAIL="${ADMIN_EMAIL:-owner@test.com}"
+_PASS="${APP_PASSWORD:-TestDeploy1!}"
 LOGIN=$(curl -s -c "$CK" -X POST "$BASE/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"owner@test.com","password":"TestDeploy1!"}')
+  -d "{\"email\":\"$_EMAIL\",\"password\":\"$_PASS\"}")
 chk "Login OWNER → role:OWNER" '"role":"OWNER"' "$LOGIN"
 chk "Login OWNER → มี session cookie" '"ok":true' "$LOGIN"
 
@@ -476,7 +478,7 @@ chk "Balance export → HTTP 200" '200' "$EXPORT_CODE"
 c "26 · Login ผิดรหัส → ต้องปฏิเสธ"
 BAD_LOGIN=$(curl -s -X POST "$BASE/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"owner@test.com","password":"WRONGPASSWORD1234"}')
+  -d "{\"email\":\"$_EMAIL\",\"password\":\"WRONGPASSWORD1234\"}")
 chk "Login ผิดรหัส → error" '"error"' "$BAD_LOGIN"
 
 # ────────────────────────────────────────────────────────────────
