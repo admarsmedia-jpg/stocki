@@ -6,7 +6,7 @@ type PreviewRow = Record<string, unknown>;
 
 const TEMPLATE_COLUMNS = [
   "รหัส", "ชื่อ", "บาร์โค้ด", "หน่วย", "หมวด", "คลัง",
-  "จำนวนยกมา", "ต้นทุนต่อหน่วย", "จุดสั่งซื้อ", "ใช้ล็อต",
+  "จำนวนยกมา", "ต้นทุนต่อหน่วย", "จุดสั่งซื้อ", "ใช้ล็อต (Y/N)",
   "Lot No.", "วันผลิต", "วันหมดอายุ", "เลขที่ PO", "โรงงานผู้ผลิต",
 ];
 
@@ -89,11 +89,14 @@ export default function Import() {
       setMessage(`พบ ${json.errors.length} แถวผิดพลาด`);
     } else if (json.ok) {
       setStatus("done");
-      const skipped = json.skipped ?? [];
-      if (skipped.length > 0) {
-        setMessage(`นำเข้าสำเร็จ — ข้ามยอดยกมา ${skipped.length} แถวที่มีสต็อกอยู่แล้ว: ${skipped.map((s: any) => `แถว ${s.rowNum} ${s.sku}`).join(", ")}`);
+      const skipped: any[] = (json.skipped ?? []).sort((a: any, b: any) => a.rowNum - b.rowNum);
+      const imported = (json.imported ?? 0);
+      if (imported === 0 && skipped.length > 0) {
+        setMessage(`ไม่มีแถวใหม่ — ข้ามทั้งหมด ${skipped.length} แถว (มีสต็อกอยู่แล้ว): ${skipped.map((s: any) => `แถว ${s.rowNum} ${s.sku}${s.reason ? ` (${s.reason})` : ""}`).join(", ")}`);
+      } else if (skipped.length > 0) {
+        setMessage(`นำเข้าสำเร็จ ${imported} แถว — ข้าม ${skipped.length} แถว: ${skipped.map((s: any) => `แถว ${s.rowNum} ${s.sku}${s.reason ? ` (${s.reason})` : ""}`).join(", ")}`);
       } else {
-        setMessage("นำเข้าสำเร็จ");
+        setMessage(`นำเข้าสำเร็จ ${imported} แถว`);
       }
       setRows([]);
     }

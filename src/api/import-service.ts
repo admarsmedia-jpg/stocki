@@ -167,6 +167,17 @@ importApp.post("/api/import/opening", async (c) => {
         category_id = catRow.id;
       }
 
+      // ตรวจบาร์โค้ดซ้ำกับ sku อื่น ก่อน upsert
+      if (row.barcode) {
+        const dupBarcode = await c.env.DB.prepare(
+          "SELECT sku FROM items WHERE barcode=? AND sku<>?",
+        ).bind(row.barcode, row.sku).first() as { sku: string } | null;
+        if (dupBarcode) {
+          skippedRows.push({ rowNum: row.rowNum, sku: row.sku, reason: `บาร์โค้ด ${row.barcode} ซ้ำกับสินค้า ${dupBarcode.sku}` });
+          continue;
+        }
+      }
+
       // upsert item
       await c.env.DB.prepare(
         `INSERT INTO items (sku, name_th, barcode, category_id, unit_id, track_lot, reorder_point_milli, standard_cost_x4)
@@ -288,7 +299,8 @@ importApp.post("/api/import/opening", async (c) => {
     await c.env.DB.batch([...stmts, docPostStmt]);
   }
 
-  return c.json({ ok: true, doc_ids: docIds, skipped: skippedRows });
+  const actualImported = Math.max(0, valid.length - skippedRows.length);
+  return c.json({ ok: true, doc_ids: docIds, skipped: skippedRows, imported: actualImported });
 });
 
 export default importApp;

@@ -4,6 +4,15 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-bugfix11] - 2026-11-02
+
+### Fixed
+- **import-service.ts**: เช็กบาร์โค้ดซ้ำกับ sku อื่นก่อน upsert item — ข้ามแถวพร้อมแสดงเหตุผล `"บาร์โค้ด X ซ้ำกับสินค้า Y"`
+- **import-service.ts**: ส่ง `imported` count กลับพร้อม response
+- **Import.tsx**: เปลี่ยน `TEMPLATE_COLUMNS` ให้ใช้ `"ใช้ล็อต (Y/N)"` ตรงกับ header ในไฟล์ Excel — ช่อง preview แสดงค่าแล้ว
+- **Import.tsx**: sort skipped rows ตาม rowNum ก่อนแสดง
+- **Import.tsx**: เมื่อข้ามทุกแถว ขึ้น "ไม่มีแถวใหม่ — ข้ามทั้งหมด N แถว" แทน "นำเข้าสำเร็จ"; แสดง reason ของแต่ละแถวที่ถูกข้าม
+
 ## [0.1.0-bugfix10] - 2026-11-02
 
 ### Fixed
