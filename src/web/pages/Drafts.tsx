@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { errorText } from "../errors";
-import { fmtQty, todayBangkok } from "../format";
+import { fmtQty, todayBangkok, fmtDateTh } from "../format";
 
 type Draft = {
   id: number;
@@ -88,7 +88,7 @@ export default function Drafts({ navigate }: { navigate: (path: string) => void 
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="font-semibold">{TYPE_TH[d.doc_type] ?? d.doc_type} · <span className="font-mono">{d.doc_no}</span></div>
-                    <div className="text-sm text-gray-600">วันที่ {d.doc_date}{d.warehouse_name ? ` · ${d.warehouse_name}` : ""}</div>
+                    <div className="text-sm text-gray-600">วันที่ {fmtDateTh(d.doc_date)}{d.warehouse_name ? ` · ${d.warehouse_name}` : ""}</div>
                     {!!d.ref_text && <div className="text-sm text-gray-500 break-words">อ้างอิง: {d.ref_text}</div>}
                   </div>
                   {notDue && <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded whitespace-nowrap">รอถึงวันที่</span>}
@@ -97,12 +97,12 @@ export default function Drafts({ navigate }: { navigate: (path: string) => void 
                   <button onClick={() => setEditing(d)} disabled={busyId === d.id} className={`${btn} border hover:bg-gray-50`}>แก้ไข</button>
                   <button onClick={() => remove(d)} disabled={busyId === d.id} className={`${btn} border border-red-200 text-red-600 hover:bg-red-50`}>ลบ</button>
                   <button onClick={() => post(d)} disabled={notDue || busyId === d.id}
-                    title={notDue ? `บันทึกจริงได้ตั้งแต่ ${d.doc_date}` : undefined}
+                    title={notDue ? `บันทึกจริงได้ตั้งแต่ ${fmtDateTh(d.doc_date)}` : undefined}
                     className={`${btn} bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-40`}>
                     บันทึกจริง
                   </button>
                 </div>
-                {notDue && <p className="text-xs text-gray-500 mt-1">บันทึกจริงได้ตั้งแต่ {d.doc_date}</p>}
+                {notDue && <p className="text-xs text-gray-500 mt-1">บันทึกจริงได้ตั้งแต่ {fmtDateTh(d.doc_date)}</p>}
               </div>
             );
           })}
@@ -182,7 +182,8 @@ function DraftEditor({ draft, onClose, onSaved }: { draft: Draft; onClose: () =>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
           <div>
             <label htmlFor="draft-date" className="block text-sm font-medium mb-1">วันที่เอกสาร</label>
-            <input id="draft-date" type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} className="border rounded px-3 min-h-[44px] w-full" />
+            <input id="draft-date" type="date" lang="th" value={docDate} onChange={(e) => setDocDate(e.target.value)} className="border rounded px-3 min-h-[44px] w-full" />
+            <p className="text-xs text-gray-500 mt-1">วันที่: {fmtDateTh(docDate)}</p>
           </div>
           <div>
             <label htmlFor="draft-ref" className="block text-sm font-medium mb-1">อ้างอิง</label>

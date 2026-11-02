@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
-import { fmtMoney, fmtQty } from "../format";
+import { fmtMoney, fmtQty, fmtDateTh } from "../format";
+import { errorText } from "../errors";
 
 type Document = {
   id: number;
@@ -42,6 +43,10 @@ export default function DocumentDetail({ docId, onBack }: Props) {
   const [lines, setLines] = useState<Line[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const isOwner = user?.role === "OWNER";
 
@@ -56,7 +61,31 @@ export default function DocumentDetail({ docId, onBack }: Props) {
       setLoading(false);
     }
     load();
-  }, [docId]);
+  }, [docId, reload]);
+
+  async function doCancel() {
+    setCancelling(true);
+    setCancelMsg(null);
+    try {
+      const res = await fetch(`/api/documents/${docId}/cancel`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": `cancel-${docId}` },
+      });
+      const json = await res.json().catch(() => ({})) as any;
+      if (!res.ok) {
+        setCancelMsg({ ok: false, text: errorText(json, res.status) });
+      } else {
+        setCancelMsg({ ok: true, text: `ยกเลิกแล้ว — สร้างเอกสารกลับรายการ ${json.cancel_no ?? ""}`.trim() });
+        setReload(r => r + 1);
+      }
+    } catch {
+      setCancelMsg({ ok: false, text: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่" });
+    } finally {
+      setCancelling(false);
+      setConfirmCancel(false);
+    }
+  }
 
   if (loading) return <div className="p-4 text-gray-500">กำลังโหลด…</div>;
   if (error || !doc) return (
@@ -78,8 +107,8 @@ export default function DocumentDetail({ docId, onBack }: Props) {
           </div>
           <div className="sm:text-right text-sm text-gray-500">
             <p>คลัง: <strong>{doc.warehouse_name}</strong></p>
-            <p>วันที่: <strong>{doc.doc_date}</strong></p>
-            <p>สถานะ: <strong className={doc.status === "POSTED" ? "text-green-600" : "text-yellow-600"}>{STATUS_TH[doc.status] ?? doc.status}</strong></p>
+            <p>วันที่: <strong>{fmtDateTh(doc.doc_date)}</strong></p>
+            <p>สถานะ: <strong className={doc.status === "POSTED" ? "text-green-600" : doc.status === "CANCELLED" ? "text-red-600" : "text-yellow-600"}>{STATUS_TH[doc.status] ?? doc.status}</strong></p>
           </div>
         </div>
         {doc.ref_text && <p className="text-sm text-gray-600">อ้างอิง: {doc.ref_text}</p>}
@@ -111,7 +140,7 @@ export default function DocumentDetail({ docId, onBack }: Props) {
                   <td className="border px-3 py-2 font-mono text-xs">{line.sku}</td>
                   <td className="border px-3 py-2">{line.name_th}</td>
                   <td className="border px-3 py-2">{line.lot_no ?? "-"}</td>
-                  <td className="border px-3 py-2">{line.expiry_date ?? "-"}</td>
+                  <td className="border px-3 py-2">{fmtDateTh(line.expiry_date)}</td>
                   <td className="border px-3 py-2 text-right whitespace-nowrap">{fmtQty(qty)}</td>
                   {isOwner && <td className="border px-3 py-2 text-right whitespace-nowrap">{fmtMoney(cost)}</td>}
                   {isOwner && <td className="border px-3 py-2 text-right whitespace-nowrap">{fmtMoney(value)}</td>}
@@ -129,7 +158,40 @@ export default function DocumentDetail({ docId, onBack }: Props) {
         >
           🖨️ พิมพ์เอกสาร
         </button>
+        {isOwner && doc.status === "POSTED" && doc.doc_type !== "CANCEL" && (
+          <button
+            onClick={() => setConfirmCancel(true)}
+            disabled={cancelling}
+            className="border border-red-300 text-red-600 bg-white px-4 min-h-[44px] whitespace-nowrap rounded text-sm hover:bg-red-50 disabled:opacity-50"
+          >
+            ยกเลิกเอกสาร
+          </button>
+        )}
       </div>
+
+      {cancelMsg && (
+        <p role="status" className={`mt-3 text-sm ${cancelMsg.ok ? "text-green-700" : "text-red-600"}`}>{cancelMsg.text}</p>
+      )}
+
+      {confirmCancel && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cancel-title">
+          <div className="bg-white rounded-lg p-5 max-w-md w-full shadow-lg">
+            <h2 id="cancel-title" className="text-lg font-bold mb-2">ยกเลิกเอกสาร {doc.doc_no}?</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              ระบบจะไม่ลบเอกสารนี้ แต่จะสร้างเอกสารกลับรายการ เพื่อคืนยอดสต็อกและต้นทุนให้เหมือนก่อนบันทึก
+              เอกสารเดิมจะเปลี่ยนสถานะเป็น "ยกเลิกแล้ว" และย้อนกลับไม่ได้
+            </p>
+            <div className="flex gap-2 justify-end flex-wrap">
+              <button onClick={() => setConfirmCancel(false)} disabled={cancelling}
+                className="border px-4 min-h-[44px] whitespace-nowrap rounded text-sm">ไม่ยกเลิก</button>
+              <button onClick={doCancel} disabled={cancelling}
+                className="bg-red-600 text-white px-4 min-h-[44px] whitespace-nowrap rounded text-sm disabled:opacity-50">
+                {cancelling ? "กำลังยกเลิก…" : "ยืนยันยกเลิกเอกสาร"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

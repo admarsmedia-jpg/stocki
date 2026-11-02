@@ -93,7 +93,7 @@ function App() {
   const roleLabel = isOwner ? "ผู้ดูแล" : "พนักงาน";
 
   return (
-    <div className="min-h-screen bg-slate-50 overflow-x-hidden pb-20 md:pb-0">
+    <div className="min-h-screen bg-slate-50 overflow-x-hidden pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
       <nav className="bg-white border-b border-gray-200 shadow-sm px-4 md:px-6 flex items-center gap-1 print:hidden" style={{ minHeight: "52px" }}>
         <span className="font-extrabold text-lg mr-5" style={{ color: "#FF6200", letterSpacing: "-0.5px" }}>Stocki!</span>
         <div className="hidden md:flex items-center gap-1">
@@ -169,7 +169,7 @@ function App() {
         </div>
       </footer>
 
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 flex print:hidden" aria-label="เมนูหลัก">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 flex print:hidden pb-[env(safe-area-inset-bottom)]" aria-label="เมนูหลัก">
         {mainPages.map((p) => {
           const active = page === p;
           return (

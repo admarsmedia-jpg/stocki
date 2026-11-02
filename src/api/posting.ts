@@ -1,5 +1,5 @@
 import { computePostDocumentUpdates, type BalanceSnapshot } from "../domain/postDocument";
-import { validateIssueLines, extractDbErrorCode, type LotInfo } from "../domain/documentEngine";
+import { validateIssueLines, extractDbErrorCode, type LotInfo, type ItemInfo } from "../domain/documentEngine";
 
 export type StockLine = { item_id: number; lot_id: number; qty_milli: number; unit_cost_x4: number };
 export type DraftDoc = { id: number; doc_type: "RECEIVE" | "ISSUE"; warehouse_id: number; doc_date: string };
@@ -52,11 +52,17 @@ export async function postDraftDocument(
     let lotInfos: LotInfo[] = [];
     if (lotIds.length > 0) {
       const rows = await db.prepare(
-        `SELECT id, expiry_date FROM lots WHERE id IN (${lotIds.map(() => "?").join(",")})`,
+        `SELECT id, expiry_date, lot_no FROM lots WHERE id IN (${lotIds.map(() => "?").join(",")})`,
       ).bind(...lotIds).all();
       lotInfos = rows.results as LotInfo[];
     }
-    const validation = validateIssueLines(lines, snap, doc.warehouse_id, new Date(doc.doc_date), lotInfos);
+    const itemIds = [...new Set(lines.map(l => l.item_id))];
+    const itemRows = await db.prepare(
+      `SELECT id, sku, name_th FROM items WHERE id IN (${itemIds.map(() => "?").join(",")})`,
+    ).bind(...itemIds).all();
+    const validation = validateIssueLines(
+      lines, snap, doc.warehouse_id, new Date(doc.doc_date), lotInfos, itemRows.results as ItemInfo[],
+    );
     if (!validation.ok) {
       const expired = validation.errors.some(e => e.includes("หมดอายุ"));
       const code = expired ? "lot_expired" : "insufficient_stock";

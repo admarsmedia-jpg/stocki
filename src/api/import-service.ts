@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { validateImportRows } from "../domain/importValidator";
 import { computePostDocumentUpdates } from "../domain/postDocument";
+import { bangkokToday } from "../domain/docDate";
 
 type Bindings = { DB: D1Database; ADMIN_EMAIL: string; APP_SECRET: string };
 type Variables = { session: { userId: number; email: string; role: string } | null };
@@ -138,7 +139,7 @@ importApp.post("/api/import/opening", async (c) => {
   }
 
   const nowIso = new Date().toISOString();
-  const docDate = nowIso.slice(0, 10);
+  const docDate = bangkokToday();
   const yymm = docDate.slice(2, 4) + docDate.slice(5, 7);
 
   // doc_no สร้างต่อ warehouse ในลูปด้านล่าง (1 คลัง = 1 เอกสาร = 1 เลข)

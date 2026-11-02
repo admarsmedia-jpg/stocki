@@ -441,7 +441,15 @@ docApp.get("/api/lots/suggest", async (c) => {
      ORDER BY l.expiry_date ASC`,
   ).bind(today, Number(item_id), Number(warehouse_id), Number(item_id)).all();
 
-  return c.json({ ok: true, lots: rows.results });
+  const noLot = await c.env.DB.prepare(
+    "SELECT qty_on_hand_milli FROM stock_balances WHERE item_id=? AND warehouse_id=? AND lot_id=0",
+  ).bind(Number(item_id), Number(warehouse_id)).first() as { qty_on_hand_milli: number } | null;
+
+  const lots = session.role === "OWNER"
+    ? rows.results
+    : (rows.results as Record<string, unknown>[]).map(({ avg_cost_x4: _hidden, ...rest }) => rest);
+
+  return c.json({ ok: true, lots, no_lot_qty_milli: noLot?.qty_on_hand_milli ?? 0 });
 });
 
 export default docApp;

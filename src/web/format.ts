@@ -17,3 +17,11 @@ export function roundTo(v: number, decimals: number): number {
 export function todayBangkok(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
 }
+
+/** "2026-11-03" → "03/11/2569" (วว/ดด/ปปปป พ.ศ.) */
+export function fmtDateTh(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  return `${m[3]}/${m[2]}/${Number(m[1]) + 543}`;
+}

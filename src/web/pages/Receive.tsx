@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { errorText } from "../errors";
-import { fmtMoney, fmtQty, todayBangkok } from "../format";
+import { fmtMoney, fmtQty, todayBangkok, fmtDateTh } from "../format";
 
 type LineItem = {
   item_id: number;
@@ -181,7 +181,8 @@ export default function Receive({ navigate }: { navigate: (path: string) => void
         </div>
         <div>
           <label htmlFor="rcv-date" className="block text-sm font-medium mb-1">วันที่เอกสาร</label>
-          <input id="rcv-date" type="date" className={input} value={docDate} onChange={e => setDocDate(e.target.value)} />
+          <input id="rcv-date" type="date" lang="th" className={input} value={docDate} onChange={e => setDocDate(e.target.value)} />
+          <p className="text-xs text-gray-500 mt-1">วันที่: {fmtDateTh(docDate)}</p>
           {isFuture && <p className="text-xs text-amber-700 mt-1">วันที่ล่วงหน้า — จะบันทึกเป็นดราฟ ยังไม่เพิ่มสต็อกจนถึงวันที่ในเอกสาร</p>}
         </div>
         <div className="sm:col-span-2">
@@ -242,11 +243,13 @@ export default function Receive({ navigate }: { navigate: (path: string) => void
                 </div>
                 <div>
                   <label htmlFor="rcv-mfg" className="block text-sm mb-1">วันผลิต *</label>
-                  <input id="rcv-mfg" type="date" className={input} value={pendingMfg} onChange={e => setPendingMfg(e.target.value)} />
+                  <input id="rcv-mfg" type="date" lang="th" className={input} value={pendingMfg} onChange={e => setPendingMfg(e.target.value)} />
+                  {!!pendingMfg && <p className="text-xs text-gray-500 mt-1">{fmtDateTh(pendingMfg)}</p>}
                 </div>
                 <div>
                   <label htmlFor="rcv-exp" className="block text-sm mb-1">วันหมดอายุ *</label>
-                  <input id="rcv-exp" type="date" className={input} value={pendingExpiry} onChange={e => setPendingExpiry(e.target.value)} />
+                  <input id="rcv-exp" type="date" lang="th" className={input} value={pendingExpiry} onChange={e => setPendingExpiry(e.target.value)} />
+                  {!!pendingExpiry && <p className="text-xs text-gray-500 mt-1">{fmtDateTh(pendingExpiry)}</p>}
                 </div>
                 <div className="sm:col-span-2">
                   <label htmlFor="rcv-mfgname" className="block text-sm mb-1">โรงงานผู้ผลิต *</label>

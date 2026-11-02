@@ -12,7 +12,20 @@ export type IssueLine = {
 export type LotInfo = {
   id: number;
   expiry_date: string; // YYYY-MM-DD
+  lot_no?: string;
 };
+
+export type ItemInfo = { id: number; sku: string; name_th: string };
+
+/** จำนวน (×1000) → ข้อความแสดงผล เช่น 75000 → "75", 1500 → "1.5" */
+export function formatQtyMilli(qty_milli: number): string {
+  return (qty_milli / 1000).toLocaleString("en-US", { maximumFractionDigits: 3 });
+}
+
+function thaiDate(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
 
 import type { BalanceSnapshot } from "./postDocument";
 export type BalanceMap = BalanceSnapshot;
@@ -40,23 +53,26 @@ export function validateIssueLines(
   warehouse_id: number,
   today: Date,
   lotInfos: LotInfo[] = [],
+  itemInfos: ItemInfo[] = [],
 ): { ok: boolean; errors: string[] } {
   const errors: string[] = [];
   const lotMap = new Map(lotInfos.map(l => [l.id, l]));
+  const itemMap = new Map(itemInfos.map(i => [i.id, i]));
 
   for (const line of lines) {
     const key = `${line.item_id}:${line.lot_id}:${warehouse_id}`;
     const bal = snapshot.get(key) ?? { qty: 0, avg_cost: 0 };
+    const item = itemMap.get(line.item_id);
+    const lot = line.lot_id > 0 ? lotMap.get(line.lot_id) : undefined;
+    let label = item ? `${item.sku} ${item.name_th}` : `สินค้า #${line.item_id}`;
+    if (line.lot_id > 0) label += ` ล็อต ${lot?.lot_no ?? `#${line.lot_id}`}`;
 
     if (bal.qty < line.qty_milli) {
-      errors.push(`item_id=${line.item_id} lot_id=${line.lot_id}: ยอดไม่เพียงพอ (มี ${bal.qty} ต้องการ ${line.qty_milli})`);
+      errors.push(`${label}: ยอดไม่เพียงพอ คงเหลือ ${formatQtyMilli(bal.qty)} แต่ต้องการตัด ${formatQtyMilli(line.qty_milli)}`);
     }
 
-    if (line.lot_id > 0) {
-      const lot = lotMap.get(line.lot_id);
-      if (lot && isExpired(lot.expiry_date, today)) {
-        errors.push(`item_id=${line.item_id} lot_id=${line.lot_id}: ล็อตหมดอายุแล้ว (${lot.expiry_date})`);
-      }
+    if (lot && isExpired(lot.expiry_date, today)) {
+      errors.push(`${label}: ล็อตหมดอายุแล้ว (${thaiDate(lot.expiry_date)})`);
     }
   }
 

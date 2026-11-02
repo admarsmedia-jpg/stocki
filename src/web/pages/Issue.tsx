@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { errorText } from "../errors";
-import { fmtQty, todayBangkok } from "../format";
+import { fmtQty, todayBangkok, fmtDateTh } from "../format";
 
 type LotOption = {
   id: number;
@@ -41,6 +41,7 @@ export default function Issue({ navigate }: { navigate: (path: string) => void }
   const [pendingQty, setPendingQty] = useState("1");
   const [pendingLotId, setPendingLotId] = useState<number | null>(null);
   const [lotOptions, setLotOptions] = useState<LotOption[]>([]);
+  const [noLotAvailable, setNoLotAvailable] = useState<number | null>(null);
   const [thaiWarning, setThaiWarning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -78,16 +79,30 @@ export default function Issue({ navigate }: { navigate: (path: string) => void }
     setError("");
     setNotice("");
 
+    const lr = await fetch(`/api/lots/suggest?item_id=${item.id}&warehouse_id=${warehouseId}`).then(r => r.json()).catch(() => ({}));
     if (item.track_lot) {
-      const lr = await fetch(`/api/lots/suggest?item_id=${item.id}&warehouse_id=${warehouseId}`).then(r => r.json()).catch(() => ({}));
       const lots: LotOption[] = lr.lots ?? [];
       setLotOptions(lots);
       const firstUsable = lots.find(l => !l.is_expired);
       setPendingLotId(firstUsable ? firstUsable.id : null);
+      setNoLotAvailable(null);
     } else {
       setLotOptions([]);
       setPendingLotId(null);
+      setNoLotAvailable(typeof lr.no_lot_qty_milli === "number" ? lr.no_lot_qty_milli : null);
     }
+  }
+
+  /** ยอดที่ยังตัดได้ = ยอดคงเหลือ − จำนวนที่เพิ่มในรายการแล้ว (สินค้า+ล็อตเดียวกัน) */
+  function availableFor(item: Item, lotId: number | null): number | null {
+    const onHand = item.track_lot
+      ? lotOptions.find(l => l.id === lotId)?.qty_on_hand_milli ?? null
+      : noLotAvailable;
+    if (onHand == null) return null;
+    const used = lines
+      .filter(l => l.item_id === item.id && (l.lot_id ?? 0) === (lotId ?? 0))
+      .reduce((s, l) => s + l.qty_milli, 0);
+    return onHand - used;
   }
 
   function clearPending() {
@@ -95,6 +110,7 @@ export default function Issue({ navigate }: { navigate: (path: string) => void }
     setPendingQty("1");
     setPendingLotId(null);
     setLotOptions([]);
+    setNoLotAvailable(null);
     setError("");
     setTimeout(() => barcodeRef.current?.focus(), 50);
   }
@@ -106,6 +122,12 @@ export default function Issue({ navigate }: { navigate: (path: string) => void }
     if (pendingItem.track_lot && pendingLotId === null) { setError("เลือกล็อตก่อน"); return; }
     const selectedLot = lotOptions.find(l => l.id === pendingLotId);
     if (selectedLot?.is_expired) { setError("ล็อตนี้หมดอายุแล้ว จ่ายไม่ได้"); return; }
+    const available = availableFor(pendingItem, pendingLotId);
+    if (available != null && qty > available) {
+      const unit = unitName(pendingItem);
+      setError(`ยอดไม่เพียงพอ: คงเหลือ ${fmtQty(Math.max(available, 0) / 1000)} ${unit} แต่ต้องการตัด ${fmtQty(qty / 1000)} ${unit}`.replace(/\s+$/, ""));
+      return;
+    }
 
     setLines(prev => [...prev, {
       item_id: pendingItem.id,
@@ -172,7 +194,8 @@ export default function Issue({ navigate }: { navigate: (path: string) => void }
         </div>
         <div>
           <label htmlFor="iss-date" className="block text-sm font-medium mb-1">วันที่เอกสาร</label>
-          <input id="iss-date" type="date" className={input} value={docDate} onChange={e => setDocDate(e.target.value)} />
+          <input id="iss-date" type="date" lang="th" className={input} value={docDate} onChange={e => setDocDate(e.target.value)} />
+          <p className="text-xs text-gray-500 mt-1">วันที่: {fmtDateTh(docDate)}</p>
           {isFuture && <p className="text-xs text-amber-700 mt-1">วันที่ล่วงหน้า — จะบันทึกเป็นดราฟ ยังไม่ตัดสต็อกจนถึงวันที่ในเอกสาร</p>}
         </div>
         <div className="sm:col-span-2">
@@ -215,6 +238,14 @@ export default function Issue({ navigate }: { navigate: (path: string) => void }
                   value={pendingQty} onChange={e => setPendingQty(e.target.value)} />
                 {!!unitName(pendingItem) && <span className="text-sm text-gray-600 whitespace-nowrap">{unitName(pendingItem)}</span>}
               </div>
+              {(() => {
+                const a = availableFor(pendingItem, pendingLotId);
+                return a == null ? null : (
+                  <p className={`text-xs mt-1 ${a <= 0 ? "text-red-600" : "text-gray-500"}`}>
+                    ตัดได้สูงสุด {fmtQty(Math.max(a, 0) / 1000)} {unitName(pendingItem)}
+                  </p>
+                );
+              })()}
             </div>
             {pendingItem.track_lot ? (
               <div>
@@ -227,7 +258,7 @@ export default function Issue({ navigate }: { navigate: (path: string) => void }
                     onChange={e => setPendingLotId(Number(e.target.value))}>
                     {lotOptions.map(l => (
                       <option key={l.id} value={l.id} disabled={!!l.is_expired}>
-                        {l.is_expired ? "⚠️ หมดอายุ " : ""}{l.lot_no} — หมด {l.expiry_date} (คงเหลือ {fmtQty(l.qty_on_hand_milli / 1000)})
+                        {l.is_expired ? "⚠️ หมดอายุ " : ""}{l.lot_no} — หมด {fmtDateTh(l.expiry_date)} (คงเหลือ {fmtQty(l.qty_on_hand_milli / 1000)})
                       </option>
                     ))}
                   </select>
@@ -264,7 +295,7 @@ export default function Issue({ navigate }: { navigate: (path: string) => void }
                   <td className="border px-2 py-1">{l.sku}</td>
                   <td className="border px-2 py-1">{l.name_th}</td>
                   <td className="border px-2 py-1">{l.lot_no ?? "-"}</td>
-                  <td className="border px-2 py-1 whitespace-nowrap">{l.expiry_date ?? "-"}</td>
+                  <td className="border px-2 py-1 whitespace-nowrap">{fmtDateTh(l.expiry_date)}</td>
                   <td className="border px-2 py-1 text-right whitespace-nowrap">{fmtQty(l.qty_milli / 1000)} {l.unit}</td>
                   <td className="border px-1 py-1 text-center">
                     <button onClick={() => setLines(prev => prev.filter((_, j) => j !== i))}

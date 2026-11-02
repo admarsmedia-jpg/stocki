@@ -1,9 +1,29 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
 import { errorText } from "../errors";
-import { fmtMoney, fmtQty, roundTo } from "../format";
+import { fmtMoney, fmtQty, roundTo, fmtDateTh } from "../format";
 
-type ReportType = "balance" | "movements" | "lots" | "expiring" | "reorder";
+type ReportType = "balance" | "movements" | "card" | "lots" | "expiring" | "reorder";
+
+type ItemOption = { id: number; sku: string; name_th: string; barcode?: string | null };
+
+/** แถวบัตรคุมสินค้า: แยก qty เป็นรับเข้า/ตัดออกตาม direction */
+function cardRow(r: Record<string, any>): Record<string, any> {
+  const qty = r.qty_milli ?? 0;
+  const out: Record<string, any> = {
+    doc_date: r.doc_date,
+    doc_no: r.doc_no,
+    doc_type: r.doc_type,
+    warehouse: r.warehouse,
+    lot_no: r.lot_no,
+    in_milli: r.direction === 1 ? qty : null,
+    out_milli: r.direction === -1 ? qty : null,
+    balance_qty_after_milli: r.balance_qty_after_milli,
+  };
+  if ("unit_cost_x4" in r) out.unit_cost_x4 = r.unit_cost_x4;
+  if ("avg_cost_after_x4" in r) out.avg_cost_after_x4 = r.avg_cost_after_x4;
+  return out;
+}
 
 function transformRow(row: Record<string, any>) {
   const out: Record<string, any> = {};
@@ -37,10 +57,15 @@ const COL_LABELS: Record<string, string> = {
   value: "มูลค่า",
   reorder_point: "จุดสั่งซื้อ",
   days_left: "เหลือ (วัน)",
+  doc_no: "เลขที่เอกสาร",
+  balance_qty_after: "คงเหลือหลังรายการ",
+  unit_cost: "ต้นทุน/หน่วย",
+  avg_cost_after: "ต้นทุนเฉลี่ยหลังรายการ",
 };
 
-const MONEY_KEYS = new Set(["avg_cost", "total_value", "value", "unit_cost", "standard_cost"]);
-const QTY_KEYS = new Set(["qty_on_hand", "total_qty", "in", "out", "reorder_point", "qty"]);
+const MONEY_KEYS = new Set(["avg_cost", "total_value", "value", "unit_cost", "standard_cost", "avg_cost_after"]);
+const QTY_KEYS = new Set(["qty_on_hand", "total_qty", "in", "out", "reorder_point", "qty", "balance_qty_after"]);
+const DATE_KEYS = new Set(["doc_date", "expiry_date", "mfg_date"]);
 const HIDDEN_KEYS = new Set(["item_id", "id", "lot_id", "warehouse_id"]);
 const DOC_TYPE_TH: Record<string, string> = { OPENING: "ยอดยกมา", RECEIVE: "รับเข้า", ISSUE: "ตัดออก", CANCEL: "ยกเลิก" };
 
@@ -60,13 +85,46 @@ export default function Reports() {
   const [dateEnd, setDateEnd] = useState("");
   const [expiringDays, setExpiringDays] = useState(30);
   const [unitDecimals, setUnitDecimals] = useState<Map<string, number>>(new Map());
+  const [cardQuery, setCardQuery] = useState("");
+  const [cardOptions, setCardOptions] = useState<ItemOption[]>([]);
+  const [cardItem, setCardItem] = useState<ItemOption | null>(null);
+  const [cardSearching, setCardSearching] = useState(false);
 
   const isOwner = user?.role === "OWNER";
 
-  async function load(type: ReportType, opts?: { days?: number }) {
-    setActive(type);
+  async function searchCardItems() {
+    setCardSearching(true);
+    setError("");
+    const q = cardQuery.trim();
+    const res = await fetch(`/api/items${q ? `?q=${encodeURIComponent(q)}` : ""}`, { credentials: "include" });
+    const json = await res.json().catch(() => ({})) as any;
+    if (!res.ok) setError(errorText(json, res.status));
+    const list: ItemOption[] = json.items ?? (Array.isArray(json) ? json : []);
+    setCardOptions(list);
+    setCardSearching(false);
+    if (list.length === 1) loadCard(list[0]);
+  }
+
+  async function loadCard(item: ItemOption) {
+    setCardItem(item);
     setLoading(true);
     setError("");
+    const res = await fetch(`/api/reports/card/${item.id}`, { credentials: "include" });
+    const json = await res.json().catch(() => ({})) as any;
+    if (!res.ok) setError(errorText(json, res.status));
+    setData((json.data ?? []).map(cardRow));
+    setLoading(false);
+  }
+
+  async function load(type: ReportType, opts?: { days?: number }) {
+    setActive(type);
+    setError("");
+    if (type === "card") {
+      if (cardItem) await loadCard(cardItem);
+      else setData([]);
+      return;
+    }
+    setLoading(true);
     let url = `/api/reports/${type}`;
     const params = new URLSearchParams();
     if (type === "movements") {
@@ -104,6 +162,7 @@ export default function Reports() {
     if (MONEY_KEYS.has(k)) return fmtMoney(Number(v));
     if (QTY_KEYS.has(k)) return fmtQty(Number(v), decimalsFor(row));
     if (k === "doc_type") return DOC_TYPE_TH[v] ?? String(v);
+    if (DATE_KEYS.has(k)) return fmtDateTh(String(v));
     return String(v);
   }
 
@@ -113,6 +172,7 @@ export default function Reports() {
     if (MONEY_KEYS.has(k)) return roundTo(Number(v), 2);
     if (QTY_KEYS.has(k)) return roundTo(Number(v), decimalsFor(row));
     if (k === "doc_type") return DOC_TYPE_TH[v] ?? v;
+    if (DATE_KEYS.has(k)) return fmtDateTh(String(v));
     return v;
   }
 
@@ -125,12 +185,14 @@ export default function Reports() {
     const ws = utils.aoa_to_sheet(wsData);
     const wb = utils.book_new();
     utils.book_append_sheet(wb, ws, "รายงาน");
-    writeFile(wb, `stocki-${active}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const suffix = active === "card" && cardItem ? `-${cardItem.sku}` : "";
+    writeFile(wb, `stocki-${active}${suffix}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   const tabs: { key: ReportType; label: string }[] = [
     { key: "balance", label: "ยอดคงเหลือ" },
     { key: "movements", label: "รับ-จ่าย" },
+    { key: "card", label: "บัตรคุมสินค้า" },
     { key: "lots", label: "แยกล็อต" },
     { key: "expiring", label: "ใกล้หมดอายุ" },
     { key: "reorder", label: "ต่ำกว่าจุดสั่ง" },
@@ -155,13 +217,41 @@ export default function Reports() {
         <div className="flex gap-2 mb-3 flex-wrap items-end">
           <div>
             <label htmlFor="rpt-from" className="block text-xs text-gray-500 mb-1">ตั้งแต่</label>
-            <input id="rpt-from" type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="border rounded px-2 min-h-[44px] text-sm" />
+            <input id="rpt-from" type="date" lang="th" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="border rounded px-2 min-h-[44px] text-sm" />
           </div>
           <div>
             <label htmlFor="rpt-to" className="block text-xs text-gray-500 mb-1">ถึง</label>
-            <input id="rpt-to" type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="border rounded px-2 min-h-[44px] text-sm" />
+            <input id="rpt-to" type="date" lang="th" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="border rounded px-2 min-h-[44px] text-sm" />
           </div>
           <button onClick={() => load("movements")} className={`${tabBtn} bg-blue-500 text-white`}>กรอง</button>
+        </div>
+      )}
+      {active === "card" && (
+        <div className="mb-3">
+          <form className="flex gap-2 flex-wrap items-end" onSubmit={(e) => { e.preventDefault(); searchCardItems(); }}>
+            <div className="flex-1 min-w-[12rem]">
+              <label htmlFor="card-q" className="block text-xs text-gray-500 mb-1">ค้นสินค้า (ชื่อ รหัส หรือบาร์โค้ด)</label>
+              <input id="card-q" value={cardQuery} onChange={(e) => setCardQuery(e.target.value)}
+                placeholder="เช่น PUMP-001 หรือ ยิงบาร์โค้ด" className="border rounded px-2 min-h-[44px] text-sm w-full" />
+            </div>
+            <button type="submit" disabled={cardSearching} className={`${tabBtn} bg-blue-500 text-white disabled:opacity-50`}>ค้นหา</button>
+          </form>
+          {cardOptions.length > 1 && (
+            <ul className="mt-2 border rounded bg-white divide-y max-h-60 overflow-auto" aria-label="ผลการค้นหาสินค้า">
+              {cardOptions.map((it) => (
+                <li key={it.id}>
+                  <button type="button" onClick={() => loadCard(it)}
+                    className={`w-full text-left px-3 min-h-[44px] text-sm hover:bg-blue-50 ${cardItem?.id === it.id ? "bg-blue-50 font-semibold" : ""}`}>
+                    <span className="font-mono text-xs text-gray-500 mr-2">{it.sku}</span>{it.name_th}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {cardItem && (
+            <p className="mt-2 text-sm">สินค้า: <strong>{cardItem.sku} {cardItem.name_th}</strong></p>
+          )}
+          {!cardItem && <p className="mt-2 text-sm text-gray-500">ค้นและเลือกสินค้าเพื่อดูประวัติรับ-จ่าย</p>}
         </div>
       )}
       {active === "expiring" && (
