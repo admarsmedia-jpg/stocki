@@ -14,18 +14,18 @@ const docApp = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-const issueLineSchema = z.object({
+export const issueLineSchema = z.object({
   item_id: z.number().int().positive(),
-  lot_id: z.number().int().min(0).default(0),
+  lot_id: z.number().int().min(0).nullish().transform(v => v ?? 0),
   qty_milli: z.number().int().positive(),
   unit_cost_x4: z.number().int().min(0).default(0),
 });
 
-const receiveLineSchema = z.object({
+export const receiveLineSchema = z.object({
   item_id: z.number().int().positive(),
   qty_milli: z.number().int().positive(),
   unit_cost_x4: z.number().int().min(0).default(0),
-  lot_id: z.number().int().min(0).optional(),
+  lot_id: z.number().int().min(0).nullish().transform(v => v ?? undefined),
   // ล็อต — ถ้ามีจะสร้าง/หาล็อตก่อนบันทึก
   lot_no: z.string().max(100).optional(),
   lot_mfg_date: dateSchema.optional(),

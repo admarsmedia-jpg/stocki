@@ -4,6 +4,11 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-bugfix14] - 2026-11-03
+
+### Fixed
+- **ตัดออกสินค้าที่ไม่ใช้ล็อตล้มเหลวทุกครั้ง** ("ข้อมูลไม่ถูกต้อง"): หน้าตัดออกส่ง `lot_id: null` แต่ API รับแค่ตัวเลข — API แปลง null เป็น 0 (ไม่มีล็อต) และหน้าเว็บส่ง 0; เพิ่ม test
+
 ## [0.1.0-ux1] - 2026-11-02
 
 ### Fixed

@@ -140,7 +140,7 @@ export default function Issue({ navigate }: { navigate: (path: string) => void }
           warehouse_id: warehouseId,
           doc_date: docDate,
           ref_text: refText || undefined,
-          lines: lines.map(l => ({ item_id: l.item_id, lot_id: l.lot_id, qty_milli: l.qty_milli, unit_cost_x4: 0 })),
+          lines: lines.map(l => ({ item_id: l.item_id, lot_id: l.lot_id ?? 0, qty_milli: l.qty_milli, unit_cost_x4: 0 })),
         }),
       });
       const r = await res.json().catch(() => ({})) as any;
