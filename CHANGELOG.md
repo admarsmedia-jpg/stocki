@@ -4,6 +4,12 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-bugfix8] - 2026-11-02
+
+### Fixed
+- **scripts/test_remote.sh**: แทน python3 ด้วย `_jn()` helper ที่ใช้ node — รันได้บน Windows Git Bash ที่ไม่มี python3
+- **scripts/test_remote.sh**: เปลี่ยน single-quoted JSON เป็น double-quoted + `--data-binary @tmpfile` สำหรับ payload ภาษาไทย — `$RUN_ID` expand ถูกต้อง และ UTF-8 ไม่เพี้ยนบน Windows
+
 ## [0.1.0-bugfix7] - 2026-11-02
 
 ### Added
