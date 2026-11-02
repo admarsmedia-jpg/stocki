@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { useStore } from "../store";
+import ResetPassword from "./ResetPassword";
 
 export default function Login({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showReset, setShowReset] = useState(false);
   const setUser = useStore((s) => s.setUser);
+
+  if (showReset) return <ResetPassword onBack={() => setShowReset(false)} />;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,6 +71,9 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
             style={{backgroundColor:"#FF6200"}}
           >
             {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
+          </button>
+          <button type="button" onClick={() => setShowReset(true)} className="w-full text-gray-400 text-sm py-1 hover:underline">
+            ลืมรหัสผ่าน?
           </button>
         </form>
       </div>

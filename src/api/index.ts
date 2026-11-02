@@ -350,6 +350,29 @@ app.put("/api/items/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// ── reset password (ยืนยันด้วย APP_SECRET) ───────────────────────────────────
+app.post("/api/auth/reset-password", async (c) => {
+  const schema = z.object({
+    app_secret: z.string().min(1),
+    new_password: z.string().min(8),
+  });
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "invalid_input", issues: parsed.error.issues }, 400);
+
+  if (parsed.data.app_secret !== c.env.APP_SECRET) {
+    return c.json({ error: "invalid_secret" }, 401);
+  }
+
+  const { hashPassword } = await import("../domain/auth");
+  const hash = await hashPassword(parsed.data.new_password);
+  await c.env.DB.prepare("UPDATE users SET password_hash=?, failed_logins=0, locked_until=NULL WHERE email=?")
+    .bind(hash, c.env.ADMIN_EMAIL).run();
+  await c.env.DB.prepare("DELETE FROM sessions").run();
+
+  return c.json({ ok: true });
+});
+
 // ── import ────────────────────────────────────────────────────────────────────
 app.route("/", importApp);
 

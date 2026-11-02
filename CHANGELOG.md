@@ -4,6 +4,12 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-bugfix7] - 2026-11-02
+
+### Added
+- **reset password**: API `POST /api/auth/reset-password` (ยืนยันด้วย APP_SECRET จาก Cloudflare secrets)
+- **หน้า ResetPassword**: เข้าถึงได้จากปุ่ม "ลืมรหัสผ่าน?" ในหน้า Login
+
 ## [0.1.0-bugfix6] - 2026-11-01
 
 ### Fixed
