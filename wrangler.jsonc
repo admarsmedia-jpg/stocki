@@ -16,7 +16,7 @@
     {
       "binding": "DB",
       "database_name": "stocki-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "6525b60e-bc9f-49d7-abcf-760f61249e9b",
       "migrations_dir": "migrations"
     }
   ],
