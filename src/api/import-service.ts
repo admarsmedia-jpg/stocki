@@ -111,13 +111,24 @@ importApp.post("/api/import/opening", async (c) => {
     }
   }
 
+  // โหลดบาร์โค้ดที่มีอยู่แล้วในระบบ (เฉพาะที่อยู่ในไฟล์) เพื่อตรวจซ้ำกับสินค้าอื่น
+  const fileBarcodes = [...new Set(rows.map((r: any) => String(r["บาร์โค้ด"] ?? "").trim()).filter(Boolean))];
+  const existingBarcodes = new Map<string, string>();
+  for (let i = 0; i < fileBarcodes.length; i += 90) {
+    const chunk = fileBarcodes.slice(i, i + 90);
+    const res = await c.env.DB.prepare(
+      `SELECT barcode, sku FROM items WHERE barcode IN (${chunk.map(() => "?").join(",")})`,
+    ).bind(...chunk).all();
+    for (const r of res.results as Array<{ barcode: string; sku: string }>) existingBarcodes.set(r.barcode, r.sku);
+  }
+
   // validate
-  const { valid, errors } = validateImportRows(rows, knownUnitCodes, knownWarehouseCodes);
+  const { valid, errors } = validateImportRows(rows, knownUnitCodes, knownWarehouseCodes, existingBarcodes);
   if (errors.length > 0) {
-    return c.json({ ok: false, errors }, 422);
+    return c.json({ ok: false, error: "validation_failed", message: `พบ ${errors.length} แถวผิดพลาด ยังไม่บันทึกข้อมูล`, errors }, 422);
   }
   if (valid.length === 0) {
-    return c.json({ ok: false, errors: [{ rowNum: 0, errors: ["ไม่มีแถวที่ถูกต้อง"] }] }, 422);
+    return c.json({ ok: false, error: "validation_failed", message: "ไม่มีแถวที่ถูกต้อง", errors: [{ rowNum: 0, errors: ["ไม่มีแถวที่ถูกต้อง"] }] }, 422);
   }
 
   // แปลง name → code สำหรับ unit และ warehouse
@@ -165,17 +176,6 @@ importApp.post("/api/import/opening", async (c) => {
         ).bind(row.category_code, row.category_code).run();
         const catRow = await c.env.DB.prepare("SELECT id FROM categories WHERE code=?").bind(row.category_code).first() as { id: number };
         category_id = catRow.id;
-      }
-
-      // ตรวจบาร์โค้ดซ้ำกับ sku อื่น ก่อน upsert
-      if (row.barcode) {
-        const dupBarcode = await c.env.DB.prepare(
-          "SELECT sku FROM items WHERE barcode=? AND sku<>?",
-        ).bind(row.barcode, row.sku).first() as { sku: string } | null;
-        if (dupBarcode) {
-          skippedRows.push({ rowNum: row.rowNum, sku: row.sku, reason: `บาร์โค้ด ${row.barcode} ซ้ำกับสินค้า ${dupBarcode.sku}` });
-          continue;
-        }
       }
 
       // upsert item

@@ -45,10 +45,12 @@ export function validateImportRows(
   rawRows: Record<string, unknown>[],
   knownUnitCodes: Set<string>,
   knownWarehouseCodes: Set<string>,
+  existingBarcodes: Map<string, string> = new Map(),
 ): ValidateResult {
   const valid: ImportRow[] = [];
   const errors: ImportRowError[] = [];
   const seenSkuLotWarehouse = new Set<string>();
+  const barcodeFirstSeen = new Map<string, { rowNum: number; sku: string }>();
 
   for (let i = 0; i < rawRows.length; i++) {
     const rowNum = i + 2; // แถวที่ 1 คือ header
@@ -106,6 +108,16 @@ export function validateImportRows(
       rowErrors.push("รหัสสินค้า+ล็อต+คลังซ้ำกันในไฟล์");
     } else {
       seenSkuLotWarehouse.add(dupKey);
+    }
+
+    if (barcode && sku) {
+      const ownerSku = existingBarcodes.get(barcode);
+      if (ownerSku && ownerSku !== sku) {
+        rowErrors.push(`บาร์โค้ด ${barcode} ซ้ำกับสินค้า ${ownerSku}`);
+      }
+      const first = barcodeFirstSeen.get(barcode);
+      if (!first) barcodeFirstSeen.set(barcode, { rowNum, sku });
+      else if (first.sku !== sku) rowErrors.push(`บาร์โค้ด ${barcode} ซ้ำกับแถว ${first.rowNum} (SKU ${first.sku})`);
     }
 
     if (rowErrors.length > 0) {

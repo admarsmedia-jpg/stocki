@@ -82,7 +82,7 @@ describe("validateImportRows", () => {
 
   it("1000 แถวผ่านทั้งหมด (คนละ SKU)", () => {
     const rows = Array.from({ length: 1000 }, (_, i) =>
-      makeRow({ รหัส: `SKU${String(i).padStart(4, "0")}` }),
+      makeRow({ รหัส: `SKU${String(i).padStart(4, "0")}`, บาร์โค้ด: `885${String(i).padStart(10, "0")}` }),
     );
     const { valid, errors } = validateImportRows(rows, UNITS, WAREHOUSES);
     expect(errors).toHaveLength(0);
@@ -90,10 +90,54 @@ describe("validateImportRows", () => {
   });
 
   it("แถวผิดไม่ถูกนับเป็น valid", () => {
-    const rows = [makeRow(), makeRow({ จำนวนยกมา: -1 }), makeRow({ รหัส: "SKU002" })];
+    const rows = [makeRow(), makeRow({ จำนวนยกมา: -1 }), makeRow({ รหัส: "SKU002", บาร์โค้ด: "999" })];
     const { valid, errors } = validateImportRows(rows, UNITS, WAREHOUSES);
     expect(errors).toHaveLength(1);
     expect(valid).toHaveLength(2);
+  });
+
+  it("บาร์โค้ดซ้ำในไฟล์ (คนละ SKU) → error พร้อมเลขแถวและ SKU", () => {
+    const { valid, errors } = validateImportRows(
+      [makeRow({ รหัส: "A", บาร์โค้ด: "111" }), makeRow({ รหัส: "B", บาร์โค้ด: "111" })],
+      UNITS, WAREHOUSES,
+    );
+    expect(valid).toHaveLength(1);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].rowNum).toBe(3);
+    expect(errors[0].errors).toContain("บาร์โค้ด 111 ซ้ำกับแถว 2 (SKU A)");
+  });
+
+  it("SKU เดียวกันหลายล็อตใช้บาร์โค้ดเดียวกันได้", () => {
+    const { errors } = validateImportRows(
+      [makeLotRow({ "Lot No.": "L1" }), makeLotRow({ "Lot No.": "L2" })],
+      UNITS, WAREHOUSES,
+    );
+    expect(errors).toHaveLength(0);
+  });
+
+  it("บาร์โค้ดซ้ำกับสินค้าในระบบ (คนละ SKU) → error", () => {
+    const { valid, errors } = validateImportRows(
+      [makeRow({ รหัส: "ZZT-DUP", บาร์โค้ด: "8850001100001" })],
+      UNITS, WAREHOUSES, new Map([["8850001100001", "PUMP-001"]]),
+    );
+    expect(valid).toHaveLength(0);
+    expect(errors[0].errors).toContain("บาร์โค้ด 8850001100001 ซ้ำกับสินค้า PUMP-001");
+  });
+
+  it("บาร์โค้ดเดิมของ SKU เดิมในระบบ (นำเข้าไฟล์ซ้ำ) → ผ่าน", () => {
+    const { errors } = validateImportRows(
+      [makeRow({ รหัส: "PUMP-001", บาร์โค้ด: "8850001100001" })],
+      UNITS, WAREHOUSES, new Map([["8850001100001", "PUMP-001"]]),
+    );
+    expect(errors).toHaveLength(0);
+  });
+
+  it("แถวไม่มีบาร์โค้ดหลายแถวไม่ถือว่าซ้ำ", () => {
+    const { errors } = validateImportRows(
+      [makeRow({ รหัส: "A", บาร์โค้ด: "" }), makeRow({ รหัส: "B", บาร์โค้ด: "" })],
+      UNITS, WAREHOUSES,
+    );
+    expect(errors).toHaveLength(0);
   });
 });
 

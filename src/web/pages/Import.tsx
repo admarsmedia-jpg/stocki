@@ -70,10 +70,17 @@ export default function Import() {
 
     setImporting(false);
 
-    // ตรวจ HTTP status ก่อน — ถ้า server ตอบ 4xx/5xx ให้แสดง error เสมอ
-    if (!res.ok) {
+    if (Array.isArray(json.errors) && json.errors.length > 0) {
+      setErrors([...json.errors].sort((a: RowError, b: RowError) => a.rowNum - b.rowNum));
       setStatus("error");
-      setMessage(`เกิดข้อผิดพลาด: ${json.error ?? json.message ?? `HTTP ${res.status}`}`);
+      setMessage(`พบ ${json.errors.length} แถวผิดพลาด — ยังไม่บันทึกข้อมูล แก้ไฟล์แล้วนำเข้าใหม่`);
+      return;
+    }
+
+    // ถ้า server ตอบ 4xx/5xx หรือไม่ได้ตอบ ok ให้แสดง error เสมอ
+    if (!res.ok || json.ok !== true) {
+      setStatus("error");
+      setMessage(`เกิดข้อผิดพลาด: ${json.message ?? json.error ?? `HTTP ${res.status}`}`);
       return;
     }
 
@@ -83,11 +90,7 @@ export default function Import() {
       return;
     }
 
-    if (!json.ok && json.errors) {
-      setErrors(json.errors);
-      setStatus("error");
-      setMessage(`พบ ${json.errors.length} แถวผิดพลาด`);
-    } else if (json.ok) {
+    {
       setStatus("done");
       const skipped: any[] = (json.skipped ?? []).sort((a: any, b: any) => a.rowNum - b.rowNum);
       const imported = (json.imported ?? 0);

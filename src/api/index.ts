@@ -9,6 +9,8 @@ import { sql } from "drizzle-orm";
 import importApp from "./import-service";
 import docApp from "./documents-service";
 import reportsApp from "./reports-service";
+import { withThaiMessage } from "../domain/errorMessages";
+import { extractDbErrorCode } from "../domain/documentEngine";
 
 type Bindings = {
   DB: D1Database;
@@ -21,6 +23,17 @@ type Variables = {
 };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// ── error responses: ทุก error มี message ภาษาไทยคู่กับรหัส error ───────────────
+app.use("/api/*", async (c, next) => {
+  await next();
+  if (c.res.status < 400 || !c.res.headers.get("content-type")?.includes("application/json")) return;
+  const body = await c.res.clone().json().catch(() => null) as Record<string, unknown> | null;
+  if (!body || typeof body.error !== "string" || typeof body.message === "string") return;
+  const headers = new Headers(c.res.headers);
+  headers.delete("content-length");
+  c.res = new Response(JSON.stringify(withThaiMessage(body)), { status: c.res.status, headers });
+});
 
 // ── session middleware ─────────────────────────────────────────────────────────
 app.use("/api/*", async (c, next) => {
@@ -320,7 +333,7 @@ app.post("/api/items", async (c) => {
   } catch (e: any) {
     const msg = String(e);
     if (msg.includes("UNIQUE") && msg.includes("sku")) return c.json({ error: "รหัสสินค้าซ้ำ" }, 400);
-    if (msg.includes("UNIQUE") && msg.includes("barcode")) return c.json({ error: "บาร์โค้ดซ้ำ" }, 400);
+    if (msg.includes("UNIQUE") && msg.includes("barcode")) return c.json({ error: "barcode_duplicate", message: "บาร์โค้ดนี้มีสินค้าอื่นใช้อยู่แล้ว" }, 409);
     if (msg.includes("UNIQUE")) return c.json({ error: "ข้อมูลซ้ำ" }, 400);
     throw e;
   }
@@ -394,7 +407,7 @@ app.post("/api/admin/reset-data", async (c) => {
 
   const body = await c.req.json().catch(() => ({}));
   if (!z.object({ confirm: z.literal("RESET") }).safeParse(body).success) {
-    return c.json({ error: "ต้องส่ง confirm: 'RESET' เพื่อยืนยัน" }, 400);
+    return c.json({ error: "confirm_required", message: "ต้องส่ง confirm: 'RESET' เพื่อยืนยัน" }, 400);
   }
 
   await c.env.DB.batch([
@@ -409,7 +422,7 @@ app.post("/api/admin/reset-data", async (c) => {
     c.env.DB.prepare("DELETE FROM warehouses"),
     c.env.DB.prepare("DELETE FROM doc_sequences"),
     c.env.DB.prepare(
-      "INSERT INTO audit_logs (table_name, record_id, action, old_json, new_json, user_id, at) VALUES ('system','0','RESET_DATA','{}','{}',?,?)",
+      "INSERT INTO audit_logs (table_name, record_id, action, old_json, new_json, user_id, at) VALUES ('system','reset-data','DELETE',NULL,'{\"action\":\"RESET_DATA\"}',?,?)",
     ).bind(session.userId, new Date().toISOString()),
   ]);
 
@@ -448,13 +461,17 @@ app.route("/api/reports", reportsApp);
 
 // ── 404 / error handlers ──────────────────────────────────────────────────────
 app.notFound((c) => {
-  if (c.req.path.startsWith("/api/")) return c.json({ error: "Not found" }, 404);
+  if (c.req.path.startsWith("/api/")) return c.json(withThaiMessage({ error: "not_found" }), 404);
   return c.notFound();
 });
 
 app.onError((err, c) => {
   console.error(err);
-  if (c.req.path.startsWith("/api/")) return c.json({ error: (err as Error).message || "Internal error" }, 500);
+  if (c.req.path.startsWith("/api/")) {
+    if (extractDbErrorCode(err) === "barcode_duplicate") return c.json(withThaiMessage({ error: "barcode_duplicate" }), 409);
+    if (extractDbErrorCode(err) === "insufficient_stock") return c.json(withThaiMessage({ error: "insufficient_stock" }), 422);
+    return c.json(withThaiMessage({ error: (err as Error).message || "internal_error" }), 500);
+  }
   return c.text("Internal error", 500);
 });
 

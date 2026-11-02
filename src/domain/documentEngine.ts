@@ -63,6 +63,27 @@ export function validateIssueLines(
   return { ok: errors.length === 0, errors };
 }
 
+/**
+ * สถานะเอกสารที่มี idempotency key เดียวกันอยู่แล้ว
+ * - DRAFT ที่มีรายการ = ดราฟที่ผู้ใช้ตั้งใจสร้าง (ห้ามลบ)
+ * - DRAFT ไม่มีรายการ = ค้างจากการบันทึกที่ล้มกลางทาง (ลบแล้วทำใหม่ได้)
+ */
+export function classifyExistingDoc(
+  doc: { status: string; line_count: number } | null,
+): "new" | "posted" | "draft" | "stale" {
+  if (!doc) return "new";
+  if (doc.status !== "DRAFT") return "posted";
+  return doc.line_count > 0 ? "draft" : "stale";
+}
+
+/** แปลง error จาก D1 เป็นรหัส error ของแอป */
+export function extractDbErrorCode(err: unknown): "insufficient_stock" | "barcode_duplicate" | null {
+  const msg = String((err as Error)?.message ?? err);
+  if (msg.includes("insufficient_stock")) return "insufficient_stock";
+  if (msg.includes("UNIQUE") && msg.includes("barcode")) return "barcode_duplicate";
+  return null;
+}
+
 /** สร้าง response สำหรับ idempotency hit */
 export function buildIdempotencyResponse(existing: { id: number; status: string }) {
   return { ok: true, idempotent: true, doc_id: existing.id, status: existing.status };
