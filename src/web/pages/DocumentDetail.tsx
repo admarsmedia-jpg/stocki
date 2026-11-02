@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
+import { fmtMoney, fmtQty } from "../format";
 
 type Document = {
   id: number;
@@ -33,6 +34,8 @@ const DOC_TYPE_LABEL: Record<string, string> = {
   CANCEL: "ยกเลิก",
 };
 
+const STATUS_TH: Record<string, string> = { DRAFT: "ดราฟ", POSTED: "บันทึกแล้ว", CANCELLED: "ยกเลิกแล้ว" };
+
 export default function DocumentDetail({ docId, onBack }: Props) {
   const { user } = useStore();
   const [doc, setDoc] = useState<Document | null>(null);
@@ -65,25 +68,25 @@ export default function DocumentDetail({ docId, onBack }: Props) {
 
   return (
     <div className="p-4 max-w-4xl mx-auto">
-      <button onClick={onBack} className="text-blue-600 text-sm mb-4 hover:underline">← กลับ</button>
+      <button onClick={onBack} className="text-blue-600 text-sm mb-4 min-h-[44px] hover:underline">← กลับ</button>
 
       <div className="bg-white border rounded-lg p-4 mb-4 print:border-0">
-        <div className="flex items-start justify-between mb-3">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
           <div>
             <h1 className="text-xl font-bold">{DOC_TYPE_LABEL[doc.doc_type] ?? doc.doc_type}</h1>
             <p className="text-2xl font-mono font-bold text-blue-700">{doc.doc_no}</p>
           </div>
-          <div className="text-right text-sm text-gray-500">
+          <div className="sm:text-right text-sm text-gray-500">
             <p>คลัง: <strong>{doc.warehouse_name}</strong></p>
             <p>วันที่: <strong>{doc.doc_date}</strong></p>
-            <p>สถานะ: <strong className={doc.status === "POSTED" ? "text-green-600" : "text-yellow-600"}>{doc.status}</strong></p>
+            <p>สถานะ: <strong className={doc.status === "POSTED" ? "text-green-600" : "text-yellow-600"}>{STATUS_TH[doc.status] ?? doc.status}</strong></p>
           </div>
         </div>
         {doc.ref_text && <p className="text-sm text-gray-600">อ้างอิง: {doc.ref_text}</p>}
         {doc.note && <p className="text-sm text-gray-600">หมายเหตุ: {doc.note}</p>}
       </div>
 
-      <div className="bg-white border rounded-lg overflow-hidden">
+      <div className="bg-white border rounded-lg overflow-x-auto">
         <table className="text-sm w-full border-collapse">
           <thead className="bg-gray-100">
             <tr>
@@ -109,9 +112,9 @@ export default function DocumentDetail({ docId, onBack }: Props) {
                   <td className="border px-3 py-2">{line.name_th}</td>
                   <td className="border px-3 py-2">{line.lot_no ?? "-"}</td>
                   <td className="border px-3 py-2">{line.expiry_date ?? "-"}</td>
-                  <td className="border px-3 py-2 text-right">{qty.toLocaleString()}</td>
-                  {isOwner && <td className="border px-3 py-2 text-right">{cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
-                  {isOwner && <td className="border px-3 py-2 text-right">{value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
+                  <td className="border px-3 py-2 text-right whitespace-nowrap">{fmtQty(qty)}</td>
+                  {isOwner && <td className="border px-3 py-2 text-right whitespace-nowrap">{fmtMoney(cost)}</td>}
+                  {isOwner && <td className="border px-3 py-2 text-right whitespace-nowrap">{fmtMoney(value)}</td>}
                 </tr>
               );
             })}
@@ -122,7 +125,7 @@ export default function DocumentDetail({ docId, onBack }: Props) {
       <div className="mt-4 flex gap-2 print:hidden">
         <button
           onClick={() => window.print()}
-          className="bg-gray-700 text-white px-4 py-2 rounded text-sm"
+          className="bg-gray-700 text-white px-4 min-h-[44px] whitespace-nowrap rounded text-sm"
         >
           🖨️ พิมพ์เอกสาร
         </button>

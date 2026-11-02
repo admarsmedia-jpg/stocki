@@ -61,14 +61,20 @@ reportsApp.get("/balance/export", async (c) => {
 });
 
 // ── movements export ─────────────────────────────────────────────────────────
+function dateRange(from?: string, to?: string): [string, string] | null | "invalid" {
+  if (!from || !to) return null;
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  return re.test(from) && re.test(to) ? [from, to] : "invalid";
+}
+
 reportsApp.get("/movements/export", async (c) => {
   const session = c.get("session")!;
   if (session.role !== "OWNER") return c.json({ error: "forbidden" }, 403);
   const role = session.role;
   const { date_from, date_to } = c.req.query() as { date_from?: string; date_to?: string };
-  const whereDate = date_from && date_to
-    ? `AND d.doc_date BETWEEN '${date_from}' AND '${date_to}'`
-    : "";
+  const range = dateRange(date_from, date_to);
+  if (range === "invalid") return c.json({ error: "invalid_input", message: "รูปแบบวันที่ไม่ถูกต้อง (ปปปป-ดด-วว)" }, 400);
+  const whereDate = range ? "AND d.doc_date BETWEEN ? AND ?" : "";
   const rows = await c.env.DB.prepare(`
     SELECT i.sku, i.name_th, d.doc_type, d.doc_date,
            SUM(CASE WHEN sm.direction=1 THEN sm.qty_milli ELSE 0 END) as in_milli,
@@ -83,7 +89,7 @@ reportsApp.get("/movements/export", async (c) => {
     WHERE 1=1 ${whereDate}
     GROUP BY i.id, d.doc_type, d.doc_date, w.id
     ORDER BY d.doc_date DESC
-  `).all();
+  `).bind(...(range ?? [])).all();
   const cols = [
     { key: "sku", label: "รหัส" },
     { key: "name_th", label: "ชื่อสินค้า" },
@@ -101,9 +107,9 @@ reportsApp.get("/movements/export", async (c) => {
 reportsApp.get("/movements", async (c) => {
   const role = c.get("session")!.role;
   const { date_start, date_end } = c.req.query() as { date_start?: string; date_end?: string };
-  const whereDate = date_start && date_end
-    ? `AND d.doc_date BETWEEN '${date_start}' AND '${date_end}'`
-    : "";
+  const range = dateRange(date_start, date_end);
+  if (range === "invalid") return c.json({ error: "invalid_input", message: "รูปแบบวันที่ไม่ถูกต้อง (ปปปป-ดด-วว)" }, 400);
+  const whereDate = range ? "AND d.doc_date BETWEEN ? AND ?" : "";
   const rows = await c.env.DB.prepare(`
     SELECT i.sku, i.name_th, d.doc_type, d.doc_date,
            SUM(CASE WHEN sm.direction=1 THEN sm.qty_milli ELSE 0 END) as in_milli,
@@ -118,7 +124,7 @@ reportsApp.get("/movements", async (c) => {
     WHERE 1=1 ${whereDate}
     GROUP BY i.id, d.doc_type, d.doc_date, w.id
     ORDER BY d.doc_date DESC
-  `).all();
+  `).bind(...(range ?? [])).all();
   return c.json({ data: rows.results });
 });
 

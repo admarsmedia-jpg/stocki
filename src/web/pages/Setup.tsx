@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { errorText } from "../errors";
 
 export default function Setup({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState("");
@@ -18,7 +19,7 @@ export default function Setup({ onDone }: { onDone: () => void }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
       });
-      if (!res.ok) { setError("เกิดข้อผิดพลาด"); return; }
+      if (!res.ok) { setError(errorText(await res.json().catch(() => ({})), res.status)); return; }
       onDone();
     } finally {
       setLoading(false);
