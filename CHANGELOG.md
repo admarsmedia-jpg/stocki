@@ -4,6 +4,12 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-bugfix12] - 2026-11-02
+
+### Fixed
+- **migration 0005**: ล้างบาร์โค้ดซ้ำ (เก็บไว้ที่สินค้า id ต่ำสุด) และบาร์โค้ดว่างเป็น NULL ก่อนสร้าง UNIQUE index — เดิม migration ล้มบน remote ที่มีข้อมูลซ้ำอยู่แล้ว ทำให้ไม่มี index กันซ้ำที่ฐานข้อมูล
+- **items API**: บาร์โค้ดว่าง/ช่องว่างแปลงเป็น NULL ป้องกัน UNIQUE ชนกันที่ค่า ""
+
 ## [0.1.0-bugfix11] - 2026-11-02
 
 ### Fixed

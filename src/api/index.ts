@@ -143,7 +143,7 @@ app.get("/api/auth/me", (c) => {
 const itemSchema = z.object({
   sku: z.string().min(1).max(100),
   name_th: z.string().min(1).max(200),
-  barcode: z.string().max(50).optional(),
+  barcode: z.string().trim().max(50).optional().transform(v => (v ? v : undefined)),
   category_id: z.number().int().positive().optional(),
   unit_id: z.number().int().positive(),
   track_lot: z.boolean().optional().default(false),
