@@ -190,7 +190,7 @@ reportsApp.get("/reorder", async (c) => {
            SUM(COALESCE(sb.qty_on_hand_milli,0)) as total_qty_milli,
            u.name_th as unit
     FROM items i
-    LEFT JOIN stock_balances sb ON sb.item_id=i.id AND sb.lot_id IS NULL
+    LEFT JOIN stock_balances sb ON sb.item_id=i.id
     LEFT JOIN units u ON u.id=i.unit_id
     WHERE i.status='ACTIVE' AND i.reorder_point_milli > 0
     GROUP BY i.id

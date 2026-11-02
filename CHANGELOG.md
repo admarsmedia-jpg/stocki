@@ -4,6 +4,14 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-bugfix9] - 2026-11-02
+
+### Fixed
+- **Import.tsx (bug1)**: ตัด idempotency key จาก `import-{64hex}` (71 chars) เป็น `imp-{32hex}` (36 chars) — ป้องกัน D1 error "LIKE or GLOB pattern too complex"
+- **Import.tsx (bug2)**: เช็ก `res.ok` ก่อนอ่าน JSON body — แสดง error ทุกครั้งที่ server ตอบ 4xx/5xx แทนที่จะขึ้น "นำเข้าสำเร็จ" ผิดๆ; เพิ่ม `catch` ป้องกัน res.json() throw
+- **importValidator.ts (bug3)**: เพิ่ม `normalizeRow()` ตัดส่วนท้าย `(Y/N)` ออกก่อนเทียบ key — ทำให้คอลัมน์ `ใช้ล็อต (Y/N)` ในไฟล์ Excel อ่านได้แม้ header format ต่างกัน
+- **reports-service.ts (bug4)**: แก้ reorder query `LEFT JOIN stock_balances sb ON sb.item_id=i.id AND sb.lot_id IS NULL` → ลบ `AND sb.lot_id IS NULL` ออก — หลัง migration 0003 ค่า sentinel เป็น 0 ไม่ใช่ NULL ทำให้ SUM qty = 0 ผิดทุกรายการ
+
 ## [0.1.0-test2] - 2026-11-02
 
 ### Changed

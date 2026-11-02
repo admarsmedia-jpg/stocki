@@ -29,6 +29,18 @@ export type ValidateResult = {
   errors: ImportRowError[];
 };
 
+/** Normalize a row object so column headers with/without (Y/N), spaces, full-width chars match */
+function normalizeRow(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    // strip parenthetical suffixes e.g. " (Y/N)" and trim
+    const normalized = k.replace(/\s*\([^)]*\)\s*$/, "").trim();
+    out[k] = v;          // keep original key too
+    if (normalized !== k) out[normalized] = v; // add normalized alias
+  }
+  return out;
+}
+
 export function validateImportRows(
   rawRows: Record<string, unknown>[],
   knownUnitCodes: Set<string>,
@@ -40,7 +52,7 @@ export function validateImportRows(
 
   for (let i = 0; i < rawRows.length; i++) {
     const rowNum = i + 2; // แถวที่ 1 คือ header
-    const raw = rawRows[i];
+    const raw = normalizeRow(rawRows[i]);
     const rowErrors: string[] = [];
 
     const sku = String(raw["รหัส"] ?? "").trim();

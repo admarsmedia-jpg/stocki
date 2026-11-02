@@ -59,15 +59,24 @@ export default function Import() {
     setImporting(true);
 
     const hash = await computeFileHash(fileRef.current.files[0]);
-    const idempotency_key = `import-${hash}`;
+    // ตัด hash ให้สั้น — ป้องกัน D1 "LIKE pattern too complex" (key+warehouse code ≤ 50 ไบต์)
+    const idempotency_key = `imp-${hash.slice(0, 32)}`;
     const res = await fetch("/api/import/opening", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idempotency_key, rows }),
     });
-    const json = await res.json() as any;
+    const json = await res.json().catch(() => ({})) as any;
 
     setImporting(false);
+
+    // ตรวจ HTTP status ก่อน — ถ้า server ตอบ 4xx/5xx ให้แสดง error เสมอ
+    if (!res.ok) {
+      setStatus("error");
+      setMessage(`เกิดข้อผิดพลาด: ${json.error ?? json.message ?? `HTTP ${res.status}`}`);
+      return;
+    }
+
     if (json.already_imported) {
       setStatus("done");
       setMessage("ไฟล์นี้นำเข้าไปแล้ว (ไม่ซ้ำ)");
@@ -78,7 +87,7 @@ export default function Import() {
       setErrors(json.errors);
       setStatus("error");
       setMessage(`พบ ${json.errors.length} แถวผิดพลาด`);
-    } else {
+    } else if (json.ok) {
       setStatus("done");
       const skipped = json.skipped ?? [];
       if (skipped.length > 0) {
