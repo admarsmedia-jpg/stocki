@@ -142,7 +142,7 @@ npm run deploy         # build + wrangler deploy + migrations remote
 ## 10. Checklist v0.1
 
 - [x] **D1 โครงโปรเจกต์ + ฐานข้อมูล + deploy**
-  - ตรวจด้วย: `npm test` ผ่าน, migration รันบน D1 เปล่าได้, `npm run deploy` แล้ว `GET /api/health` ตอบ `{"ok":true}`, ไฟล์ `wrangler.jsonc` ไม่มี database_id ที่ผูกบัญชีผู้พัฒนาตายตัว
+  - ตรวจด้วย: `npm test` ผ่าน, migration รันบน D1 เปล่าได้, `npm run deploy` แล้ว `GET /api/health` ตอบ `{"ok":true}`, ไฟล์ `wrangler.jsonc` ต้องมี `database_id` ของ D1 production อยู่เสมอ (ห้ามลบหรือย้ายไป `.wrangler/wrangler.toml.local` เพราะ Wrangler ไม่อ่านไฟล์นั้น ถ้าไม่มี id นี้ `wrangler deploy` อาจสร้าง D1 ใหม่ที่ว่างเปล่า และคำสั่ง `--remote` จะหาฐานข้อมูลจริงไม่เจอ)
 - [x] **D2 ล็อกอิน + หน้าสินค้า**
   - หน้า First-run setup (ตั้งรหัสให้ `ADMIN_EMAIL`), บทบาท OWNER/STAFF, หน้ารายการ/แก้ไขสินค้า ค้นด้วยชื่อหรือบาร์โค้ด, สวิตช์ "ใช้ล็อต/วันหมดอายุ"
   - ตรวจด้วย: test ล็อกอินถูก/ผิด, ล็อกอินผิด 10 ครั้งถูกล็อก 15 นาที, STAFF เรียกข้อมูลต้นทุนได้ 403, ค้นบาร์โค้ดเจอถูกตัว
