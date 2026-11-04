@@ -4,6 +4,11 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- `scripts/test_remote.sh`: บาร์โค้ดทดสอบไม่ซ้ำกันในแต่ละรอบ (เดิมรันซ้ำแล้วชนกฎบาร์โค้ดห้ามซ้ำ ทำให้ import ล้ม 3 ข้อ)
+- `test_remote.sh` / `seed_remote.sh`: ต้องระบุ `BASE` ไม่เช่นนั้นแจ้งเตือนภาษาไทย แทนการยิงไป localhost เงียบ ๆ
+
+
 ## [0.1.0-users1] - 2026-11-04
 
 ### Added

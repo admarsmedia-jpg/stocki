@@ -10,7 +10,10 @@
 # =============================================================================
 set -euo pipefail
 
-BASE="${BASE:-http://localhost:8787}"
+BASE="${BASE:-}"
+if [[ -z "$BASE" ]]; then
+  echo "ยังไม่ได้บอกที่อยู่เว็บ: พิมพ์  export BASE=https://ที่อยู่เว็บของร้าน  ก่อน (ทดสอบเครื่องตัวเองใช้ http://localhost:8787)"; exit 1
+fi
 CK="/tmp/stocki_seed_$$.txt"
 PASS=0; FAIL=0
 
