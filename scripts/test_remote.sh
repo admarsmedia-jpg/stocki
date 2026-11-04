@@ -317,7 +317,7 @@ fi
 # ────────────────────────────────────────────────────────────────
 c "18 · Concurrent ISSUE 20 คำขอ → ยอดไม่ติดลบ"
 BAL_JSON4=$(curl -s -b "$CK" "$BASE/api/reports/balance")
-BAL_START=$(_jn "const r=(d.data||[]).filter(x=>x.sku&&x.sku.startsWith('OIL001-'));r.length?r[0].qty_on_hand_milli:0" "$BAL_JSON4" "0")
+BAL_START=$(_jn "const r=(d.data||[]).filter(x=>x.item_id==${OIL001_ID});r.length?r[0].qty_on_hand_milli:0" "$BAL_JSON4" "0")
 echo "  OIL001 ก่อน concurrent=$((BAL_START / 1000)) ลิตร"
 
 for i in $(seq 1 20); do
@@ -329,9 +329,10 @@ done
 wait; sleep 2
 
 BAL_JSON5=$(curl -s -b "$CK" "$BASE/api/reports/balance")
-BAL_END=$(_jn "const r=(d.data||[]).filter(x=>x.sku&&x.sku.startsWith('OIL001-'));r.length?r[0].qty_on_hand_milli:-1" "$BAL_JSON5" "-1")
+BAL_END=$(_jn "const r=(d.data||[]).filter(x=>x.item_id==${OIL001_ID});r.length?r[0].qty_on_hand_milli:-1" "$BAL_JSON5" "-1")
 echo "  OIL001 หลัง concurrent=$((BAL_END / 1000)) ลิตร"
 [[ "$BAL_END" -ge 0 ]] 2>/dev/null && ok "ยอดไม่ติดลบหลัง concurrent 20 คำขอ" || fail "ยอดติดลบ! ($BAL_END)"
+[[ $((BAL_START - BAL_END)) -eq 20000 ]] && ok "ยอดลดลง 20 พอดี (ทุกคำขอตัดครั้งเดียว)" || fail "ยอดลด $(((BAL_START - BAL_END) / 1000)) ควรเป็น 20"
 
 # ────────────────────────────────────────────────────────────────
 c "19 · Reports — balance: ยอดรวม ≥ 7 สินค้า"
