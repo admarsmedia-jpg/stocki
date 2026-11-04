@@ -4,6 +4,10 @@ All notable changes to Stocki will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- test ล็อตหมดอายุใน edge-cases ผูกกับนาฬิกาจริง ทำให้ล้มหลังวันที่ 3 พ.ย.
+
+
 ## [0.1.0-bugfix15] - 2026-11-03
 
 ### Added

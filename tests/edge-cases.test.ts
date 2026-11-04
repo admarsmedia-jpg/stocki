@@ -123,7 +123,7 @@ describe("validateIssueLines — edge cases", () => {
 
   it("lot_id > 0 แต่ lot หมดอายุ → error", () => {
     const balances = new Map([["4:1:1", { qty: 10_000, avg_cost: 1_000_000 }]]);
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const yesterday = new Date(TODAY.getTime() - 86_400_000).toISOString().slice(0, 10);
     const { ok, errors } = validateIssueLines(
       [{ item_id: 4, lot_id: 1, qty_milli: 1_000 }],
       balances,
