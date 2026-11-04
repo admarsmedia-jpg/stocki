@@ -21,6 +21,10 @@ const ERR_TH: Record<string, string> = {
   account_locked: "บัญชีถูกล็อก 15 นาที เนื่องจากล็อกอินผิดหลายครั้ง",
   invalid_credentials: "อีเมลหรือรหัสผ่านไม่ถูกต้อง",
   invalid_secret: "APP_SECRET ไม่ถูกต้อง",
+  email_taken: "อีเมลนี้มีผู้ใช้อยู่แล้ว",
+  cannot_change_self: "ปิดใช้งานหรือลดสิทธิ์บัญชีของตัวเองไม่ได้",
+  last_owner: "ต้องมีเจ้าของที่ใช้งานอยู่อย่างน้อย 1 คน",
+  account_disabled: "บัญชีนี้ถูกปิดใช้งาน กรุณาติดต่อเจ้าของร้าน",
 };
 
 const THAI = /[฀-๿]/;

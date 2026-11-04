@@ -19,6 +19,10 @@ export const ERROR_MESSAGES_TH: Record<string, string> = {
   cannot_cancel: "ยกเลิกได้เฉพาะเอกสารที่บันทึกแล้ว",
   cannot_cancel_cancel: "ยกเลิกเอกสารยกเลิกไม่ได้",
   confirm_required: "ต้องพิมพ์คำยืนยัน RESET ก่อนล้างข้อมูล",
+  email_taken: "อีเมลนี้มีผู้ใช้อยู่แล้ว",
+  cannot_change_self: "ปิดใช้งานหรือลดสิทธิ์บัญชีของตัวเองไม่ได้",
+  last_owner: "ต้องมีเจ้าของที่ใช้งานอยู่อย่างน้อย 1 คน",
+  account_disabled: "บัญชีนี้ถูกปิดใช้งาน กรุณาติดต่อเจ้าของร้าน",
   internal_error: "เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่",
 };
 

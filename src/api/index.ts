@@ -7,6 +7,7 @@ import { users, sessions, items as itemsTable, categories, units } from "../db/s
 import { eq, like, or } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import importApp from "./import-service";
+import usersApp from "./users-service";
 import docApp from "./documents-service";
 import reportsApp from "./reports-service";
 import { withThaiMessage } from "../domain/errorMessages";
@@ -99,7 +100,7 @@ app.post("/api/auth/login", async (c) => {
     "SELECT id, email, password_hash, role, is_active, failed_logins, locked_until FROM users WHERE email=?",
   ).bind(email).first() as any;
 
-  if (!user || !user.is_active) return c.json({ error: "invalid_credentials" }, 401);
+  if (!user) return c.json({ error: "invalid_credentials" }, 401);
 
   const { checkLockout, verifyPassword, generateSessionId } = await import("../domain/auth");
   if (checkLockout(user.failed_logins, user.locked_until)) {
@@ -118,6 +119,9 @@ app.post("/api/auth/login", async (c) => {
     await c.env.DB.prepare("UPDATE users SET failed_logins=? WHERE id=?").bind(newFails, user.id).run();
     return c.json({ error: "invalid_credentials" }, 401);
   }
+
+  // Only reveal "disabled" after the correct password, so the message cannot be used to probe emails.
+  if (!user.is_active) return c.json({ error: "account_disabled" }, 403);
 
   await c.env.DB.prepare("UPDATE users SET failed_logins=0, locked_until=NULL WHERE id=?").bind(user.id).run();
 
@@ -454,6 +458,7 @@ app.post("/api/auth/reset-password", async (c) => {
 
 // ── import ────────────────────────────────────────────────────────────────────
 app.route("/", importApp);
+app.route("/", usersApp);
 
 // ── documents ─────────────────────────────────────────────────────────────────
 app.route("/", docApp);

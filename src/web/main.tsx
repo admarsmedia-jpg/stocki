@@ -12,12 +12,13 @@ import Issue from "./pages/Issue";
 import DocumentDetail from "./pages/DocumentDetail";
 import Drafts from "./pages/Drafts";
 import ResetDataDialog from "./pages/ResetData";
+import Users from "./pages/Users";
 
-type Page = "items" | "import" | "receive" | "issue" | "reports" | "drafts" | "document";
+type Page = "items" | "import" | "receive" | "issue" | "reports" | "drafts" | "users" | "document";
 
 const LABELS: Record<Page, string> = {
   items: "สินค้า", import: "นำเข้า Excel", receive: "รับสินค้า", issue: "ตัดออก",
-  reports: "รายงาน", drafts: "ดราฟ", document: "เอกสาร",
+  reports: "รายงาน", drafts: "ดราฟ", users: "ผู้ใช้งาน", document: "เอกสาร",
 };
 const SHORT: Partial<Record<Page, string>> = { import: "นำเข้า", receive: "รับเข้า" };
 
@@ -97,7 +98,7 @@ function App() {
       <nav className="bg-white border-b border-gray-200 shadow-sm px-4 md:px-6 flex items-center gap-1 print:hidden" style={{ minHeight: "52px" }}>
         <span className="font-extrabold text-lg mr-5" style={{ color: "#FF6200", letterSpacing: "-0.5px" }}>Stocki!</span>
         <div className="hidden md:flex items-center gap-1">
-          {[...mainPages, "drafts" as Page].map((p) => {
+          {[...mainPages, "drafts" as Page, ...(isOwner ? ["users" as Page] : [])].map((p) => {
             const active = page === p;
             return (
               <button key={p} onClick={() => go(p)}
@@ -130,6 +131,9 @@ function App() {
               <div className="px-4 py-2 text-xs text-gray-500 border-b border-gray-100 break-all">{user.email}<br />{roleLabel}</div>
               <button onClick={() => go("drafts")} className="w-full text-left px-4 min-h-[44px] text-sm hover:bg-gray-50">ดราฟ (เอกสารลงวันที่ล่วงหน้า)</button>
               {isOwner && (
+                <button onClick={() => go("users")} className="w-full text-left px-4 min-h-[44px] text-sm hover:bg-gray-50">ผู้ใช้งาน (บัญชีพนักงาน)</button>
+              )}
+              {isOwner && (
                 <button onClick={() => { setMenuOpen(false); setShowReset(true); }} className="w-full text-left px-4 min-h-[44px] text-sm text-red-600 hover:bg-red-50">ล้างข้อมูลทั้งหมด</button>
               )}
               <button onClick={handleLogout} className="w-full text-left px-4 min-h-[44px] text-sm text-red-500 hover:bg-red-50">ออกจากระบบ</button>
@@ -144,6 +148,7 @@ function App() {
         {page === "issue" && <Issue navigate={navigateFn} />}
         {page === "reports" && <Reports />}
         {page === "drafts" && <Drafts navigate={navigateFn} />}
+        {page === "users" && isOwner && <Users currentEmail={user.email} />}
         {page === "document" && !!docId && <DocumentDetail docId={docId} onBack={() => go("items")} />}
       </main>
       <footer className="print:hidden border-t border-gray-200 bg-white mt-8 text-xs text-gray-400">

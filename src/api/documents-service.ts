@@ -52,14 +52,24 @@ type DocType = "RECEIVE" | "ISSUE";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-async function nextDocNo(db: D1Database, docType: string, yymm: string): Promise<string> {
+async function reserveDocNo(db: D1Database, docType: string, yymm: string): Promise<{ doc_no: string; seq: number }> {
   // RETURNING ทำให้ atomic — ได้เลขของตัวเองแน่นอน ไม่มี race condition
   const row = await db.prepare(
     `INSERT INTO doc_sequences (doc_type, yymm, last_no) VALUES (?,?,1)
      ON CONFLICT(doc_type, yymm) DO UPDATE SET last_no = last_no + 1
      RETURNING last_no`,
   ).bind(docType, yymm).first() as { last_no: number };
-  return buildDocNo(docType as "RECEIVE" | "ISSUE" | "CANCEL", yymm, row.last_no);
+  return { doc_no: buildDocNo(docType as "RECEIVE" | "ISSUE" | "CANCEL", yymm, row.last_no), seq: row.last_no };
+}
+
+async function nextDocNo(db: D1Database, docType: string, yymm: string): Promise<string> {
+  return (await reserveDocNo(db, docType, yymm)).doc_no;
+}
+
+// Give an unused number back only while it is still the latest, so a concurrent reservation is never reused.
+async function releaseDocNo(db: D1Database, docType: string, yymm: string, seq: number) {
+  await db.prepare("UPDATE doc_sequences SET last_no = last_no - 1 WHERE doc_type=? AND yymm=? AND last_no=?")
+    .bind(docType, yymm, seq).run();
 }
 
 async function resolveLines(db: D1Database, docType: DocType, lines: Array<ReceiveLineIn | IssueLineIn>): Promise<StockLine[]> {
@@ -129,7 +139,7 @@ async function createDocument(c: any, docType: DocType, data: z.infer<typeof rec
 
   const lines = await resolveLines(db, docType, data.lines);
   const yymm = doc_date.slice(2, 4) + doc_date.slice(5, 7);
-  const doc_no = await nextDocNo(db, docType, yymm);
+  const { doc_no, seq } = await reserveDocNo(db, docType, yymm);
   const insertDoc = db.prepare(
     `INSERT INTO documents (doc_type, doc_no, doc_date, warehouse_id, status, ref_text, note, idempotency_key, created_by)
      VALUES (?,?,?,?,'DRAFT',?,?,?,?)`,
@@ -153,6 +163,7 @@ async function createDocument(c: any, docType: DocType, data: z.infer<typeof rec
   try {
     doc_id = (await insertDoc.run()).meta.last_row_id;
   } catch (err) {
+    await releaseDocNo(db, docType, yymm, seq);
     const again = await findByKey(db, idempotency_key);
     if (again) return c.json(buildIdempotencyResponse(again));
     throw err;
@@ -163,9 +174,10 @@ async function createDocument(c: any, docType: DocType, data: z.infer<typeof rec
   try {
     result = await postDraftDocument(db, draft, lines, session.userId);
   } finally {
-    // ถ้าบันทึกไม่สำเร็จ ลบหัวเอกสารที่ยังไม่มีรายการ ให้ส่งซ้ำด้วย key เดิมได้
-    await db.prepare("DELETE FROM documents WHERE id=? AND status='DRAFT' AND NOT EXISTS (SELECT 1 FROM document_lines WHERE document_id=?)")
+    // ถ้าบันทึกไม่สำเร็จ ลบหัวเอกสารที่ยังไม่มีรายการ ให้ส่งซ้ำด้วย key เดิมได้ และคืนเลขเอกสารไม่ให้เลขกระโดด
+    const removed = await db.prepare("DELETE FROM documents WHERE id=? AND status='DRAFT' AND NOT EXISTS (SELECT 1 FROM document_lines WHERE document_id=?)")
       .bind(doc_id, doc_id).run();
+    if (removed.meta.changes > 0) await releaseDocNo(db, docType, yymm, seq);
   }
   if (!result.ok) return c.json(result.body, result.status);
   return c.json({ ok: true, doc_id, doc_no });
